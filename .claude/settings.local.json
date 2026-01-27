@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python3 -m venv:*)",
+      "Bash(source /mnt/c/Users/User/OneDrive/Desktop/CHVS/analisis_turnos_bodega/turnos_bodega/huellero_processor/venv/bin/activate)",
+      "Bash(python:*)",
+      "Bash(find:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(/tmp/huellero_venv/bin/python:*)",
+      "Bash(git -C /mnt/c/Users/User/OneDrive/Desktop/CHVS/analisis_turnos_bodega/turnos_bodega/huellero_processor rev-parse:*)"
+    ]
+  }
+}
