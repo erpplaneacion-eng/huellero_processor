@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos de datos
+data/input/*.xls
+data/input/*.xlsx
+data/output/*.xlsx
+logs/*.log
+
+# Datos maestro (contiene datos personales)
+data/maestro/*.xlsx
+data/maestro/*.csv
+
+# Copia antigua del proyecto
+huellero_processor/
+
+# Sistema
+.DS_Store
+Thumbs.db

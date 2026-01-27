@@ -1,0 +1,173 @@
+"""
+Configuración del Sistema Procesador de Huellero
+Corporación Hacia un Valle Solidario
+"""
+
+# ========== CONFIGURACIÓN DE ARCHIVOS ==========
+
+# Rutas de directorios
+DIR_INPUT = "data/input"
+DIR_OUTPUT = "data/output"
+DIR_MAESTRO = "data/maestro"
+DIR_LOGS = "logs"
+
+# Nombres de archivos
+ARCHIVO_MAESTRO = "empleados.xlsx"
+PREFIJO_OUTPUT = "REPORTE_ASISTENCIA"
+
+# ========== CONFIGURACIÓN DE PROCESAMIENTO ==========
+
+# Umbrales de tiempo (en segundos)
+UMBRAL_DUPLICADOS = 120  # 2 minutos - marcaciones más cercanas se consideran duplicadas
+UMBRAL_MISMO_TURNO = 3600  # 1 hora - para agrupar marcaciones del mismo turno
+
+# Validación de horas laboradas
+HORAS_MINIMAS_TURNO = 4
+HORAS_MAXIMAS_TURNO = 16
+HORAS_NORMALES_MIN = 8
+HORAS_NORMALES_MAX = 13
+
+# ========== CONFIGURACIÓN DE TURNOS ==========
+
+# Horarios para clasificación AM/PM
+HORA_INICIO_AM = 6  # 06:00
+HORA_FIN_AM = 12    # 11:59
+
+HORA_INICIO_PM = 12  # 12:00
+HORA_FIN_PM = 24     # 23:59
+
+# Horarios para inferencia de estados
+# Si una marcación sin estado ocurre en estos rangos, se infiere como:
+RANGO_INFERENCIA_ENTRADA = [(3, 11)]   # 03:00 a 11:00 -> probablemente ENTRADA
+RANGO_INFERENCIA_SALIDA = [(14, 20)]   # 14:00 a 20:00 -> probablemente SALIDA
+
+# Definición de turno nocturno (hora de inicio)
+HORA_INICIO_TURNO_NOCTURNO = 16  # A partir de las 16:00 se considera inicio de nocturno
+
+# ========== CONFIGURACIÓN DE OBSERVACIONES ==========
+
+OBSERVACIONES = {
+    'OK': 'Sin observaciones',
+    'TURNO_NOCTURNO': 'Turno nocturno',
+    'SALIDA_NR': 'Salida no registrada',
+    'ENTRADA_NR': 'Entrada no registrada',
+    'ESTADO_INFERIDO': 'Estado inferido por contexto',
+    'DUPLICADOS_ELIM': 'Duplicados eliminados',
+    'MULT_ENTRADAS': 'Múltiples entradas',
+    'MULT_SALIDAS': 'Múltiples salidas',
+    'TURNO_LARGO': 'ALERTA: Turno mayor a 14 horas',
+    'TURNO_CORTO': 'ALERTA: Turno menor a 6 horas',
+    'DATOS_CORRUPTOS': 'ALERTA: Datos empleado requieren corrección',
+    'TRABAJO_DOMINICAL': 'Trabajo dominical',
+    'REQUIERE_REVISION': 'Requiere revisión manual',
+    'SIN_MARCACIONES': 'Sin marcaciones registradas',
+    'SALIDA_CORREGIDA': 'Marcación de salida corregida - empleado registró Entrada en lugar de Salida',
+    'NOCTURNO_PROSPECTIVO': 'Turno nocturno detectado por entrada PM y salida AM del día siguiente'
+}
+
+# ========== CONFIGURACIÓN DE COLUMNAS EXCEL ==========
+
+COLUMNAS_OUTPUT = [
+    'CODIGO COLABORADOR',
+    'NOMBRE COMPLETO DEL COLABORADOR',
+    'DOCUMENTO DEL COLABORADOR',
+    'FECHA',
+    'DIA',
+    '# MARCACIONES AM',
+    '# MARCACIONES PM',
+    'HORA DE INGRESO',
+    'HORA DE SALIDA',
+    'TOTAL HORAS LABORADAS',
+    'OBSERVACION'
+]
+
+# Columnas del archivo maestro (si existe)
+COLUMNAS_MAESTRO = {
+    'codigo': 'CODIGO',
+    'nombre': 'NOMBRE',
+    'documento': 'DOCUMENTO',
+    'cargo': 'CARGO'  # opcional
+}
+
+# ========== CONFIGURACIÓN DE FORMATO EXCEL ==========
+
+# Colores para formato condicional (RGB hex)
+COLORES = {
+    'VERDE': '#C6EFCE',      # OK
+    'AMARILLO': '#FFEB9C',   # Advertencia
+    'NARANJA': '#FFC7CE',    # Observaciones normales
+    'ROJO': '#FF0000',       # Alertas críticas
+    'AZUL': '#DDEBF7',       # Turno nocturno
+    'GRIS': '#D9D9D9'        # Sin datos
+}
+
+# Anchos de columna (en caracteres)
+ANCHOS_COLUMNAS = {
+    'CODIGO COLABORADOR': 18,
+    'NOMBRE COMPLETO DEL COLABORADOR': 35,
+    'DOCUMENTO DEL COLABORADOR': 20,
+    'FECHA': 12,
+    'DIA': 12,
+    '# MARCACIONES AM': 18,
+    '# MARCACIONES PM': 18,
+    'HORA DE INGRESO': 16,
+    'HORA DE SALIDA': 16,
+    'TOTAL HORAS LABORADAS': 20,
+    'OBSERVACION': 50
+}
+
+# ========== CONFIGURACIÓN DE FORMATO DE FECHAS ==========
+
+FORMATO_FECHA_INPUT = '%d/%m/%Y %H:%M'  # Formato en archivo de entrada
+FORMATO_FECHA_OUTPUT = '%d/%m/%Y'       # Formato en archivo de salida
+FORMATO_HORA_OUTPUT = '%H:%M'           # Formato de hora en salida
+FORMATO_ARCHIVO = '%Y%m%d_%H%M%S'       # Formato para nombres de archivo
+
+# Nombres de días en español
+DIAS_SEMANA = {
+    0: 'Lunes',
+    1: 'Martes',
+    2: 'Miércoles',
+    3: 'Jueves',
+    4: 'Viernes',
+    5: 'Sábado',
+    6: 'Domingo'
+}
+
+# ========== CONFIGURACIÓN DE LOGGING ==========
+
+LOG_LEVEL = 'INFO'  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+# ========== CONFIGURACIÓN AVANZADA ==========
+
+# Permitir inferencia de estados
+PERMITIR_INFERENCIA = True
+
+# Eliminar automáticamente duplicados
+ELIMINAR_DUPLICADOS_AUTO = True
+
+# Generar hoja de resumen en Excel
+GENERAR_HOJA_RESUMEN = True
+
+# Generar archivo de casos especiales
+GENERAR_CASOS_ESPECIALES = True
+
+# Validar datos de empleado (nombre igual a código)
+VALIDAR_DATOS_EMPLEADO = True
+
+# ========== MENSAJES DEL SISTEMA ==========
+
+MENSAJES = {
+    'inicio': '🕐 Iniciando procesamiento de archivo de huellero...',
+    'carga_exitosa': '✅ Archivo cargado exitosamente',
+    'limpieza_completa': '🧹 Limpieza de datos completada',
+    'inferencia_completa': '🧠 Inferencia de estados completada',
+    'turnos_construidos': '🔨 Turnos construidos exitosamente',
+    'calculo_completo': '🔢 Cálculo de horas completado',
+    'excel_generado': '📊 Archivo Excel generado',
+    'proceso_completo': '✅ Procesamiento completado exitosamente',
+    'error_archivo': '❌ Error al procesar archivo',
+    'sin_datos': '⚠️ No se encontraron datos para procesar'
+}
