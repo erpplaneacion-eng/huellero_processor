@@ -8,6 +8,8 @@ Huellero Processor is a Python data pipeline that transforms raw biometric finge
 
 ## Commands
 
+### CLI (main processor)
+
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -25,9 +27,29 @@ python main.py --sin-maestro
 python main.py --interactivo
 ```
 
+### Django Web Interface
+
+```bash
+cd web
+
+# Install web dependencies
+pip install -r requirements.txt
+
+# Run migrations
+python manage.py migrate
+
+# Create superuser
+python manage.py createsuperuser
+
+# Run development server
+python manage.py runserver
+```
+
 There is no test suite. Testing is done manually by processing files.
 
 ## Architecture
+
+### Core Pipeline
 
 The system is a 5-phase sequential pipeline defined in `main.py`:
 
@@ -39,10 +61,23 @@ Input Excel → DataCleaner → StateInference → ShiftBuilder → Calculator �
 
 - **data_cleaner.py** — Loads Excel, standardizes columns (ID→CODIGO, Nombre→NOMBRE, Fecha/Hora→FECHA_HORA, Estado→ESTADO), converts types, removes duplicate records within a configurable time threshold (default 120s).
 - **state_inference.py** — Fills missing Entrada/Salida states using three methods in order: time-range heuristics, context from adjacent records, and employee historical patterns. Falls back to `INDEFINIDO`.
-- **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥15:00, exit next morning before 10:00) by assigning to the entry date. Produces complete and incomplete shift records.
+- **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥16:00, exit next morning before 10:00) by assigning to the entry date. Produces complete and incomplete shift records.
 - **calculator.py** — Counts AM/PM clock-ins, generates observation codes (OK, TURNO_NOCTURNO, SALIDA_NR, TURNO_LARGO, TRABAJO_DOMINICAL, etc.), and optionally merges employee master data (DOCUMENTO field) from `data/maestro/`.
 - **excel_generator.py** — Writes the 11-column report with color-coded rows (green=OK, blue=nocturnal, yellow=minor, orange=alert), frozen headers, and a summary sheet. Also generates a separate `CASOS_REVISION_*.xlsx` for records needing manual review.
 - **logger.py** — Dual-output logging (file + console) with statistics tracking across all phases.
+
+### Django Web App (`web/`)
+
+Browser-based interface for file upload and processing. Deployed to Railway.
+
+- **apps/users/** — Authentication with role-based access (Logística, Supervisión, Admin, etc.)
+- **apps/logistica/** — File upload UI and processing API. Uses `processor.py` to wrap the core pipeline.
+- **huellero_web/settings.py** — Django config with Railway deployment support, PostgreSQL in production, SQLite in development.
+
+Key endpoints:
+- `/logistica/` — Main dashboard (requires login)
+- `/logistica/api/procesar/` — POST endpoint for file processing
+- `/logistica/api/descargar/<filename>/` — Download generated reports
 
 ### Configuration (`config.py`)
 
