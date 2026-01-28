@@ -53,7 +53,7 @@ RANGO_INFERENCIA_ENTRADA = [(3, 11)]   # 03:00 a 11:00 -> probablemente ENTRADA
 RANGO_INFERENCIA_SALIDA = [(14, 20)]   # 14:00 a 20:00 -> probablemente SALIDA
 
 # Definición de turno nocturno (hora de inicio)
-HORA_INICIO_TURNO_NOCTURNO = 15.5  # A partir de las 15:30 se considera inicio de nocturno
+HORA_INICIO_TURNO_NOCTURNO = 17.5  # A partir de las 17:30 se considera inicio de nocturno
 
 # ========== CONFIGURACIÓN DE OBSERVACIONES ==========
 
