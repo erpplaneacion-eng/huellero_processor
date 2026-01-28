@@ -1,0 +1,1 @@
+web: gunicorn huellero_web.wsgi --log-file -

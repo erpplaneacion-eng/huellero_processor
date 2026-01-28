@@ -55,6 +55,10 @@ data/maestro/*.csv
 *.sqlite3
 db.sqlite3
 
+# Environment variables
+.env
+web/.env
+
 # Sistema
 .DS_Store
 Thumbs.db

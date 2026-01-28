@@ -1,6 +1,17 @@
-pandas==3.0.0
-openpyxl==3.1.2
-xlrd==2.0.1
-XlsxWriter==3.1.9
-python-dateutil==2.8.2
-django==5.0
+# Core
+pandas>=2.0.0
+openpyxl>=3.1.2
+xlrd>=2.0.1
+XlsxWriter>=3.1.9
+python-dateutil>=2.8.2
+
+# Django
+django>=4.2,<5.0
+
+# Base de datos
+dj-database-url>=2.1.0
+psycopg2-binary>=2.9.9
+
+# Servidor de producción
+gunicorn>=21.2.0
+whitenoise>=6.6.0
