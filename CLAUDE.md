@@ -59,7 +59,7 @@ Input Excel → DataCleaner → StateInference → ShiftBuilder → Calculator �
 
 ### Module responsibilities (`src/`)
 
-- **data_cleaner.py** — Loads Excel, standardizes columns (ID→CODIGO, Nombre→NOMBRE, Fecha/Hora→FECHA_HORA, Estado→ESTADO), converts types, removes duplicate records within a configurable time threshold (default 120s).
+- **data_cleaner.py** — Loads Excel, standardizes columns (ID→CODIGO, Nombre→NOMBRE, Fecha/Hora→FECHA_HORA, Estado→ESTADO), converts types, removes duplicate records within 15 minutes keeping the LAST record of each group.
 - **state_inference.py** — Fills missing Entrada/Salida states using three methods in order: time-range heuristics, context from adjacent records, and employee historical patterns. Falls back to `INDEFINIDO`.
 - **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥16:00, exit next morning before 10:00) by assigning to the entry date. Produces complete and incomplete shift records.
 - **calculator.py** — Counts AM/PM clock-ins, generates observation codes (OK, TURNO_NOCTURNO, SALIDA_NR, TURNO_LARGO, TRABAJO_DOMINICAL, etc.), and optionally merges employee master data (DOCUMENTO field) from `data/maestro/`.
@@ -82,9 +82,9 @@ Key endpoints:
 ### Configuration (`config.py`)
 
 All thresholds, time ranges, feature flags, directory paths, and format strings are centralized here. Key settings:
-- `UMBRAL_DUPLICADOS` (120s) — duplicate detection window
+- `UMBRAL_DUPLICADOS` (900s / 15 min) — duplicate detection window, keeps LAST record
 - `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — hour ranges for time-based state inference
-- `HORA_INICIO_TURNO_NOCTURNO` (16) — nocturnal shift detection threshold
+- `HORA_INICIO_TURNO_NOCTURNO` (15.5 / 15:30) — nocturnal shift detection threshold
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`
 

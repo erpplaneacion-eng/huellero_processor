@@ -17,17 +17,23 @@ class ShiftBuilder:
         self.turnos = []
         self.casos_especiales = []
     
-    def es_turno_nocturno(self, hora_entrada):
+    def es_turno_nocturno(self, fecha_hora_entrada):
         """
         Determina si un turno es nocturno basándose en hora de entrada
-        
+
         Args:
-            hora_entrada: Hora de entrada (0-23)
-            
+            fecha_hora_entrada: datetime de entrada o hora como entero/float
+
         Returns:
             True si es nocturno
         """
-        return hora_entrada >= config.HORA_INICIO_TURNO_NOCTURNO
+        if hasattr(fecha_hora_entrada, 'hour'):
+            # Es un datetime, convertir a hora decimal
+            hora_decimal = fecha_hora_entrada.hour + fecha_hora_entrada.minute / 60
+        else:
+            # Es un número (hora)
+            hora_decimal = fecha_hora_entrada
+        return hora_decimal >= config.HORA_INICIO_TURNO_NOCTURNO
     
     def construir_turnos_empleado(self, df_empleado):
         """
@@ -83,7 +89,7 @@ class ShiftBuilder:
                     fecha_turno = entrada_fecha_hora.date()
                     
                     # Determinar si es nocturno
-                    es_nocturno = self.es_turno_nocturno(entrada_hora)
+                    es_nocturno = self.es_turno_nocturno(entrada_fecha_hora)
                     
                     turno = {
                         'codigo': entrada['CODIGO'],
@@ -116,7 +122,7 @@ class ShiftBuilder:
                         'entrada': entrada_fecha_hora,
                         'salida': None,
                         'horas': None,
-                        'es_nocturno': self.es_turno_nocturno(entrada_hora),
+                        'es_nocturno': self.es_turno_nocturno(entrada_fecha_hora),
                         'completo': False,
                         'entrada_inferida': entrada.get('ESTADO_INFERIDO', False),
                         'salida_inferida': False,
@@ -188,7 +194,7 @@ class ShiftBuilder:
             if (not turno_t['completo']
                     and turno_t['entrada'] is not None
                     and turno_t['salida'] is None
-                    and turno_t['entrada'].hour >= config.HORA_INICIO_TURNO_NOCTURNO):
+                    and self.es_turno_nocturno(turno_t['entrada'])):
                 fecha_siguiente = turno_t['fecha'] + timedelta(days=1)
                 for idx_s, turno_s in enumerate(turnos_empleado):
                     if idx_s in indices_a_eliminar or idx_s == idx_t:

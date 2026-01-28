@@ -150,61 +150,83 @@ class DataCleaner:
     
     def eliminar_duplicados(self, df):
         """
-        Elimina marcaciones duplicadas (mismo empleado, < 2 minutos)
-        
+        Elimina marcaciones duplicadas (mismo empleado, dentro del umbral de tiempo).
+        Conserva el ÚLTIMO registro de cada grupo de duplicados.
+
         Args:
             df: DataFrame a limpiar
-            
+
         Returns:
             DataFrame sin duplicados
         """
         logger.log_fase("ELIMINACIÓN DE DUPLICADOS")
-        
+
         if not config.ELIMINAR_DUPLICADOS_AUTO:
             logger.info("Eliminación automática de duplicados desactivada")
             return df
-        
+
         df_limpio = df.copy()
-        indices_eliminar = []
-        
-        # Calcular diferencia de tiempo con la marcación anterior
-        df_limpio['diff_seconds'] = df_limpio.groupby('CODIGO')['FECHA_HORA'].diff().dt.total_seconds()
-        
-        for idx, row in df_limpio.iterrows():
-            if idx == 0:
+        indices_eliminar = set()
+
+        # Procesar por empleado
+        for codigo in df_limpio['CODIGO'].unique():
+            df_emp = df_limpio[df_limpio['CODIGO'] == codigo].sort_values('FECHA_HORA')
+            indices_emp = df_emp.index.tolist()
+
+            if len(indices_emp) <= 1:
                 continue
-            
-            # Verificar si es del mismo empleado
-            if row['CODIGO'] == df_limpio.iloc[idx-1]['CODIGO']:
-                # Verificar si está dentro del umbral
-                if row['diff_seconds'] <= config.UMBRAL_DUPLICADOS:
-                    # Verificar si es del mismo tipo
-                    estado_actual = row['ESTADO']
-                    estado_anterior = df_limpio.iloc[idx-1]['ESTADO']
-                    
-                    if estado_actual == estado_anterior or pd.isna(estado_actual):
-                        # Es duplicado - marcar para eliminar
-                        indices_eliminar.append(idx)
-                        
-                        # Registrar en log
-                        logger.log_duplicados(
-                            empleado=f"{row['CODIGO']} - {row['NOMBRE']}",
-                            fecha_hora=row['FECHA_HORA'],
-                            cantidad=1
-                        )
-        
+
+            # Agrupar registros consecutivos dentro del umbral
+            grupo_actual = [indices_emp[0]]
+
+            for i in range(1, len(indices_emp)):
+                idx_actual = indices_emp[i]
+                idx_anterior = indices_emp[i - 1]
+
+                fecha_actual = df_limpio.loc[idx_actual, 'FECHA_HORA']
+                fecha_anterior = df_limpio.loc[idx_anterior, 'FECHA_HORA']
+                diff_seconds = (fecha_actual - fecha_anterior).total_seconds()
+
+                estado_actual = df_limpio.loc[idx_actual, 'ESTADO']
+                estado_anterior = df_limpio.loc[idx_anterior, 'ESTADO']
+
+                # Si está dentro del umbral y mismo tipo de estado
+                if diff_seconds <= config.UMBRAL_DUPLICADOS and (
+                    estado_actual == estado_anterior or pd.isna(estado_actual) or pd.isna(estado_anterior)
+                ):
+                    grupo_actual.append(idx_actual)
+                else:
+                    # Procesar grupo anterior: eliminar todos excepto el último
+                    if len(grupo_actual) > 1:
+                        for idx_eliminar in grupo_actual[:-1]:
+                            indices_eliminar.add(idx_eliminar)
+                            logger.log_duplicados(
+                                empleado=f"{df_limpio.loc[idx_eliminar, 'CODIGO']} - {df_limpio.loc[idx_eliminar, 'NOMBRE']}",
+                                fecha_hora=df_limpio.loc[idx_eliminar, 'FECHA_HORA'],
+                                cantidad=1
+                            )
+                    # Iniciar nuevo grupo
+                    grupo_actual = [idx_actual]
+
+            # Procesar último grupo
+            if len(grupo_actual) > 1:
+                for idx_eliminar in grupo_actual[:-1]:
+                    indices_eliminar.add(idx_eliminar)
+                    logger.log_duplicados(
+                        empleado=f"{df_limpio.loc[idx_eliminar, 'CODIGO']} - {df_limpio.loc[idx_eliminar, 'NOMBRE']}",
+                        fecha_hora=df_limpio.loc[idx_eliminar, 'FECHA_HORA'],
+                        cantidad=1
+                    )
+
         # Eliminar duplicados
-        df_limpio = df_limpio.drop(indices_eliminar).reset_index(drop=True)
-        
-        # Eliminar columna auxiliar
-        df_limpio = df_limpio.drop('diff_seconds', axis=1)
-        
+        df_limpio = df_limpio.drop(list(indices_eliminar)).reset_index(drop=True)
+
         total_eliminados = len(indices_eliminar)
-        logger.info(f"✅ Duplicados eliminados: {total_eliminados}")
-        
-        self.duplicados_eliminados = indices_eliminar
+        logger.info(f"✅ Duplicados eliminados: {total_eliminados} (se conservó el último de cada grupo)")
+
+        self.duplicados_eliminados = list(indices_eliminar)
         self.df_limpio = df_limpio
-        
+
         return df_limpio
     
     def procesar(self, ruta_archivo):
