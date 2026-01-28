@@ -12,13 +12,9 @@
             <p class="login-subtitle">Corporación Hacia un Valle Solidario</p>
         </div>
 
-        {% if messages %}
-        <div class="messages">
-            {% for message in messages %}
-            <div class="message message--{{ message.tags }}">
-                {{ message }}
-            </div>
-            {% endfor %}
+        {% if error %}
+        <div class="login-error">
+            {{ error }}
         </div>
         {% endif %}
 
@@ -58,4 +54,38 @@
         </form>
     </div>
 </div>
+
+<!-- Toast container -->
+<div id="toastContainer" class="toast-container"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Mostrar toast si hay mensaje
+    {% if toast_message %}
+    document.addEventListener('DOMContentLoaded', function() {
+        showToast('{{ toast_message }}', '{{ toast_type }}');
+    });
+    {% endif %}
+
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        toast.className = `toast toast--${type}`;
+        toast.innerHTML = `
+            <span class="toast__icon">${type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️'}</span>
+            <span class="toast__message">${message}</span>
+        `;
+        container.appendChild(toast);
+
+        // Mostrar con animación
+        setTimeout(() => toast.classList.add('toast--visible'), 10);
+
+        // Ocultar después de 4 segundos
+        setTimeout(() => {
+            toast.classList.remove('toast--visible');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
+    }
+</script>
 {% endblock %}
