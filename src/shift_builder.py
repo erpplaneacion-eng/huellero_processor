@@ -74,6 +74,15 @@ class ShiftBuilder:
                         # Encontró otra entrada antes de salida
                         # Si es el mismo día, tratar como salida
                         if siguiente['FECHA_HORA'].date() == entrada_fecha_hora.date():
+                            # NO parear si la primera entrada es madrugada (<10:00) y la segunda es nocturna (>=15:30)
+                            # Esto indica patrón de turno nocturno: la primera es salida del día anterior
+                            entrada_es_madrugada = entrada_hora < 10
+                            siguiente_es_nocturno = self.es_turno_nocturno(siguiente['FECHA_HORA'])
+
+                            if entrada_es_madrugada and siguiente_es_nocturno:
+                                # No parear - la entrada de madrugada será salida de turno nocturno anterior
+                                break
+
                             salida = siguiente
                             salida_idx = j
                             salida_corregida = True
