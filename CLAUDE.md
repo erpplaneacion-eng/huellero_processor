@@ -49,7 +49,7 @@ Input Excel → DataCleaner → StateInference → ShiftBuilder → Calculator �
 All thresholds, time ranges, feature flags, directory paths, and format strings are centralized here. Key settings:
 - `UMBRAL_DUPLICADOS` (120s) — duplicate detection window
 - `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — hour ranges for time-based state inference
-- `HORA_INICIO_TURNO_NOCTURNO` (15) — nocturnal shift detection threshold
+- `HORA_INICIO_TURNO_NOCTURNO` (16) — nocturnal shift detection threshold
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`
 
@@ -66,5 +66,5 @@ All thresholds, time ranges, feature flags, directory paths, and format strings 
 - Datetime format is `DD/MM/YYYY HH:MM` (Colombian convention).
 - Observations are pipe-separated (`|`) when multiple apply to one shift.
 - Nocturnal exit records (00:00–10:00) are paired with the previous day's entry and attributed to the entry date.
-- The shift dict structure includes `es_nocturno`, `completo`, `entrada_inferida`, `salida_inferida` boolean flags.
+- The shift dict structure includes `es_nocturno`, `completo`, `entrada_inferida`, `salida_inferida`, `salida_corregida`, `nocturno_prospectivo` boolean flags.
 - Dependencies: pandas, openpyxl, xlrd, XlsxWriter, python-dateutil. Python 3.8+.

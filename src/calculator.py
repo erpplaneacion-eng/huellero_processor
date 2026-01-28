@@ -80,6 +80,8 @@ class Calculator:
         if turno['horas'] is not None:
             if turno['horas'] > config.HORAS_MAXIMAS_TURNO:
                 observaciones.append(config.OBSERVACIONES['TURNO_LARGO'])
+            elif turno['horas'] > config.HORAS_LIMITE_JORNADA:
+                observaciones.append(config.OBSERVACIONES['EXCEDE_JORNADA'])
             elif turno['horas'] < config.HORAS_MINIMAS_TURNO:
                 observaciones.append(config.OBSERVACIONES['TURNO_CORTO'])
         

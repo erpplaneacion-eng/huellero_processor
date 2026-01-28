@@ -26,6 +26,7 @@ HORAS_MINIMAS_TURNO = 4
 HORAS_MAXIMAS_TURNO = 16
 HORAS_NORMALES_MIN = 8
 HORAS_NORMALES_MAX = 13
+HORAS_LIMITE_JORNADA = 9.8  # Límite máximo de horas por jornada laboral
 
 # ========== CONFIGURACIÓN DE TURNOS ==========
 
@@ -57,6 +58,7 @@ OBSERVACIONES = {
     'MULT_SALIDAS': 'Múltiples salidas',
     'TURNO_LARGO': 'ALERTA: Turno mayor a 14 horas',
     'TURNO_CORTO': 'ALERTA: Turno menor a 6 horas',
+    'EXCEDE_JORNADA': 'ALERTA: Excede límite de jornada (9.8 horas)',
     'DATOS_CORRUPTOS': 'ALERTA: Datos empleado requieren corrección',
     'TRABAJO_DOMINICAL': 'Trabajo dominical',
     'REQUIERE_REVISION': 'Requiere revisión manual',
