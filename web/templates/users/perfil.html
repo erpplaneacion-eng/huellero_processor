@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Mi Perfil{% endblock %}
+
+{% block content %}
+<header class="header">
+    <a href="{% url 'users:redirect' %}" class="header__back">← Volver</a>
+    <div class="header__icon">👤</div>
+    <h1 class="header__title">Mi Perfil</h1>
+    <p class="header__subtitle">{{ user.get_full_name|default:user.username }}</p>
+</header>
+
+<div class="card">
+    <h2 class="card__title">
+        <span class="card__title-icon">📋</span>
+        Información de la Cuenta
+    </h2>
+
+    <div class="perfil-info">
+        <div class="perfil-row">
+            <span class="perfil-label">Usuario:</span>
+            <span class="perfil-value">{{ user.username }}</span>
+        </div>
+        <div class="perfil-row">
+            <span class="perfil-label">Nombre:</span>
+            <span class="perfil-value">{{ user.get_full_name|default:"-" }}</span>
+        </div>
+        <div class="perfil-row">
+            <span class="perfil-label">Email:</span>
+            <span class="perfil-value">{{ user.email|default:"-" }}</span>
+        </div>
+        {% if perfil %}
+        <div class="perfil-row">
+            <span class="perfil-label">Área:</span>
+            <span class="perfil-value">{{ perfil.get_area_display }}</span>
+        </div>
+        <div class="perfil-row">
+            <span class="perfil-label">Cargo:</span>
+            <span class="perfil-value">{{ perfil.cargo|default:"-" }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<a href="{% url 'users:logout' %}" class="btn btn--primary">
+    🚪 Cerrar Sesión
+</a>
+{% endblock %}

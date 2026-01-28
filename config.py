@@ -3,13 +3,23 @@ Configuración del Sistema Procesador de Huellero
 Corporación Hacia un Valle Solidario
 """
 
+import os
+from pathlib import Path
+
 # ========== CONFIGURACIÓN DE ARCHIVOS ==========
 
-# Rutas de directorios
-DIR_INPUT = "data/input"
-DIR_OUTPUT = "data/output"
-DIR_MAESTRO = "data/maestro"
-DIR_LOGS = "logs"
+# Directorio raíz del proyecto (donde está config.py)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Rutas de directorios (rutas absolutas)
+DIR_INPUT = BASE_DIR / "data" / "input"
+DIR_OUTPUT = BASE_DIR / "data" / "output"
+DIR_MAESTRO = BASE_DIR / "data" / "maestro"
+DIR_LOGS = BASE_DIR / "logs"
+
+# Crear directorios si no existen
+for _dir in [DIR_INPUT, DIR_OUTPUT, DIR_MAESTRO, DIR_LOGS]:
+    _dir.mkdir(parents=True, exist_ok=True)
 
 # Nombres de archivos
 ARCHIVO_MAESTRO = "empleados.xlsx"

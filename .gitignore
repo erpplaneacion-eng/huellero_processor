@@ -39,13 +39,21 @@ data/input/*.xls
 data/input/*.xlsx
 data/output/*.xlsx
 logs/*.log
+web/logs/
 
 # Datos maestro (contiene datos personales)
 data/maestro/*.xlsx
 data/maestro/*.csv
 
-# Copia antigua del proyecto
-huellero_processor/
+# Archivos temporales de Excel
+~$*.xlsx
+
+# Claude Code
+.claude/
+
+# Database
+*.sqlite3
+db.sqlite3
 
 # Sistema
 .DS_Store

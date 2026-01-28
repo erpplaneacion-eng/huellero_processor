@@ -133,6 +133,10 @@ El sistema genera logs detallados en `logs/`:
 - `procesamiento_YYYYMMDD_HHMMSS.log` - Log general
 - `casos_especiales_YYYYMMDD.xlsx` - Casos para revisión manual
 
+##contraseñas usuarios logistica
+marcecast
+marce123
+
 ## 🛠️ Soporte
 
 Para reportar problemas o sugerencias, contactar al administrador del sistema.
