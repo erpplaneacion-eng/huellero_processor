@@ -4,6 +4,7 @@ Calcula horas, conteos y genera observaciones
 """
 
 import pandas as pd
+from datetime import datetime, timedelta, time
 import config
 from src.logger import logger
 
@@ -152,21 +153,74 @@ class Calculator:
             fecha_str = turno['fecha'].strftime(config.FORMATO_FECHA_OUTPUT)
             dia_semana = config.DIAS_SEMANA[turno['fecha'].weekday()]
             
-            resultado = {
-                'CODIGO COLABORADOR': int(turno['codigo']),
-                'NOMBRE COMPLETO DEL COLABORADOR': turno['nombre'],
-                'DOCUMENTO DEL COLABORADOR': '',  # Se llenará con maestro si existe
-                'FECHA': fecha_str,
-                'DIA': dia_semana,
-                '# MARCACIONES AM': marc_am,
-                '# MARCACIONES PM': marc_pm,
-                'HORA DE INGRESO': entrada_str,
-                'HORA DE SALIDA': salida_str,
-                'TOTAL HORAS LABORADAS': turno['horas'] if turno['horas'] else '',
-                'OBSERVACION': observaciones
-            }
+            # Verificar si cruza medianoche (turno nocturno que termina al día siguiente)
+            cruza_medianoche = False
+            if turno['es_nocturno'] and turno['completo'] and pd.notna(turno['salida']) and pd.notna(turno['entrada']):
+                if turno['salida'].date() > turno['entrada'].date():
+                    cruza_medianoche = True
             
-            resultados.append(resultado)
+            if cruza_medianoche:
+                # ===== DIVIDIR EN DOS REGISTROS =====
+                
+                # --- PARTE 1: Entrada -> 00:00 ---
+                fin_dia_p1 = datetime.combine(turno['entrada'].date() + timedelta(days=1), time.min)
+                horas_p1 = (fin_dia_p1 - turno['entrada']).total_seconds() / 3600
+                
+                res_p1 = {
+                    'CODIGO COLABORADOR': int(turno['codigo']),
+                    'NOMBRE COMPLETO DEL COLABORADOR': turno['nombre'],
+                    'DOCUMENTO DEL COLABORADOR': '',
+                    'FECHA': fecha_str,
+                    'DIA': dia_semana,
+                    '# MARCACIONES AM': marc_am,
+                    '# MARCACIONES PM': marc_pm,
+                    'HORA DE INGRESO': entrada_str,
+                    'HORA DE SALIDA': '00:00',
+                    'TOTAL HORAS LABORADAS': round(horas_p1, 2),
+                    'OBSERVACION': observaciones
+                }
+                resultados.append(res_p1)
+                
+                # --- PARTE 2: 00:00 -> Salida ---
+                # Usar fecha del día siguiente
+                fecha_p2 = turno['salida'].date()
+                fecha_str_p2 = fecha_p2.strftime(config.FORMATO_FECHA_OUTPUT)
+                dia_semana_p2 = config.DIAS_SEMANA[fecha_p2.weekday()]
+                
+                horas_p2 = (turno['salida'] - fin_dia_p1).total_seconds() / 3600
+                
+                res_p2 = {
+                    'CODIGO COLABORADOR': int(turno['codigo']),
+                    'NOMBRE COMPLETO DEL COLABORADOR': turno['nombre'],
+                    'DOCUMENTO DEL COLABORADOR': '',
+                    'FECHA': fecha_str_p2,
+                    'DIA': dia_semana_p2,
+                    '# MARCACIONES AM': 0,  # No duplicar conteos
+                    '# MARCACIONES PM': 0,
+                    'HORA DE INGRESO': '00:00',
+                    'HORA DE SALIDA': salida_str.replace('*', ''),
+                    'TOTAL HORAS LABORADAS': round(horas_p2, 2),
+                    'OBSERVACION': observaciones
+                }
+                resultados.append(res_p2)
+                
+            else:
+                # ===== REGISTRO ÚNICO (ESTÁNDAR) =====
+                resultado = {
+                    'CODIGO COLABORADOR': int(turno['codigo']),
+                    'NOMBRE COMPLETO DEL COLABORADOR': turno['nombre'],
+                    'DOCUMENTO DEL COLABORADOR': '',  # Se llenará con maestro si existe
+                    'FECHA': fecha_str,
+                    'DIA': dia_semana,
+                    '# MARCACIONES AM': marc_am,
+                    '# MARCACIONES PM': marc_pm,
+                    'HORA DE INGRESO': entrada_str,
+                    'HORA DE SALIDA': salida_str,
+                    'TOTAL HORAS LABORADAS': turno['horas'] if turno['horas'] else '',
+                    'OBSERVACION': observaciones
+                }
+                
+                resultados.append(resultado)
         
         df_resultado = pd.DataFrame(resultados)
         
