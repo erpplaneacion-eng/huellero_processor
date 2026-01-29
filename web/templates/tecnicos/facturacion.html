@@ -24,7 +24,7 @@
 </nav>
 
 <header class="header">
-    <div class="header__icon">💰</div>
+    <div class="header__icon">🧾</div>
     <h1 class="header__title">{{ titulo }}</h1>
     <p class="header__subtitle">Corporación Hacia un Valle Solidario</p>
 </header>
@@ -34,15 +34,15 @@
     <div class="filters-card">
         <form method="get" class="filters-form">
             <div class="form-group">
-                <label for="supervisor" class="form-label">Supervisor</label>
+                <label for="supervisor" class="form-label">Supervisor / Responsable</label>
                 <input type="text" name="supervisor" id="supervisor" class="form-input" 
-                       placeholder="Buscar por supervisor..." value="{{ filtros.supervisor }}">
+                       placeholder="Buscar..." value="{{ filtros.supervisor }}">
             </div>
 
             <div class="form-group">
-                <label for="sede" class="form-label">Sede / Centro</label>
+                <label for="sede" class="form-label">Sede / Proyecto</label>
                 <input type="text" name="sede" id="sede" class="form-input" 
-                       placeholder="Buscar por sede..." value="{{ filtros.sede }}">
+                       placeholder="Buscar..." value="{{ filtros.sede }}">
             </div>
 
             <div class="form-group">
@@ -85,7 +85,7 @@
     <div class="card">
         <h2 class="card__title">
             <span class="card__title-icon">📊</span>
-            Detalle de Registros
+            Detalle de Facturación
         </h2>
 
         <div class="table-container">
