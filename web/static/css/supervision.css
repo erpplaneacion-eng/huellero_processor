@@ -130,8 +130,13 @@
 
 .table-container {
     overflow-x: auto;
+    overflow-y: auto; /* Scroll vertical activado */
+    max-height: 850px; /* Altura aprox para 20 registros + cabecera */
     margin-top: 1rem;
-    /* Sombras sutiles para indicar scroll si es necesario */
+    border: 1px solid #dee2e6; /* Borde para delimitar el área de scroll */
+    border-radius: 8px;
+    
+    /* Sombras sutiles para indicar scroll horizontal */
     background: linear-gradient(to right, white 30%, rgba(255,255,255,0)),
                 linear-gradient(to right, rgba(255,255,255,0), white 70%) 0 100%,
                 radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.2), rgba(0,0,0,0)),
@@ -163,7 +168,8 @@
     font-weight: 600;
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: 100; /* Asegurar que esté por encima del contenido */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Sombra para separar visualmente al hacer scroll */
 }
 
 .data-table tbody tr:hover {
