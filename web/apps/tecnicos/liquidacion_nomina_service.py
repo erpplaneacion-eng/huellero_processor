@@ -1,16 +1,18 @@
 """
 Servicio de Liquidación de Nómina
 Cruza nomina_cali con facturacion para generar liquidación de pagos
+Agrupado por SEDE (no por manipuladora)
 Corporación Hacia un Valle Solidario
 """
 
 import os
 from datetime import datetime, date, timedelta
+from collections import defaultdict
 from apps.tecnicos.google_sheets import GoogleSheetsService
 
 
 class LiquidacionNominaService:
-    """Servicio para generar liquidación de nómina cruzando nomina_cali con facturacion"""
+    """Servicio para generar liquidación de nómina agrupada por sede"""
 
     DIAS_SEMANA = {
         0: 'Lunes',
@@ -24,16 +26,13 @@ class LiquidacionNominaService:
 
     NOMBRE_HOJA = 'liquidacion_nomina'
 
-    # Encabezados de la hoja
+    # Encabezados de la hoja (agrupado por sede)
     HEADERS = [
         'SUPERVISOR',
-        'CEDULA',
-        'NOMBRE COLABORADOR',
         'SEDE',
         'FECHA',
         'DIA',
-        'HORA INICIAL',
-        'HORA FINAL',
+        'CANT. MANIPULADORAS',
         'TOTAL HORAS',
         'HUBO_RACIONES',
         'COMPLEMENTO AM/PM',
@@ -80,18 +79,18 @@ class LiquidacionNominaService:
                     'complemento_ampm': reg.get('COMPLEMENTO_AM_PM_PREPARADO', 0) or 0,
                     'complemento_pm': reg.get('COMPLEMENTO_PM_PREPARADO', 0) or 0,
                     'almuerzo_ju': reg.get('ALMUERZO_JORNADA_UNICA', 0) or 0,
-                    'industrializado': reg.get('COMPLEMENTO_AM_PM_INDUSTRIALIZADO', 0) or 0
+                    'industrializado': reg.get('COMPLEMENTO_AM_PM_INDUSTRIALIZADO', 0) or 0,
+                    'novedad_fact': reg.get('NOVEDAD', '')
                 }
 
         return facturacion_por_sede
 
-    def calcular_horas(self, hora_inicial, hora_final):
-        """Calcula el total de horas entre dos horarios"""
+    def calcular_horas_en_minutos(self, hora_inicial, hora_final):
+        """Calcula el total de minutos entre dos horarios"""
         try:
             if not hora_inicial or not hora_final:
-                return ''
+                return 0
 
-            # Parsear horas (pueden venir como "5:30:00" o "05:30:00")
             def parse_hora(h):
                 h = str(h).strip()
                 if not h:
@@ -99,26 +98,30 @@ class LiquidacionNominaService:
                 partes = h.split(':')
                 horas = int(partes[0])
                 minutos = int(partes[1]) if len(partes) > 1 else 0
-                return horas * 60 + minutos  # Retornar en minutos
+                return horas * 60 + minutos
 
             inicio_min = parse_hora(hora_inicial)
             fin_min = parse_hora(hora_final)
 
             if inicio_min is None or fin_min is None:
-                return ''
+                return 0
 
-            # Calcular diferencia
             diff_min = fin_min - inicio_min
             if diff_min < 0:
-                diff_min += 24 * 60  # Ajustar si cruza medianoche
+                diff_min += 24 * 60
 
-            horas = diff_min // 60
-            minutos = diff_min % 60
-
-            return f"{horas}:{minutos:02d}"
+            return diff_min
 
         except Exception:
+            return 0
+
+    def minutos_a_horas(self, minutos):
+        """Convierte minutos a formato HH:MM"""
+        if minutos == 0:
             return ''
+        horas = minutos // 60
+        mins = minutos % 60
+        return f"{horas}:{mins:02d}"
 
     def crear_hoja_si_no_existe(self):
         """Crea la hoja liquidacion_nomina si no existe y agrega los encabezados"""
@@ -133,13 +136,13 @@ class LiquidacionNominaService:
                 cols=len(self.HEADERS)
             )
             # Agregar encabezados
-            hoja.update('A1:Q1', [self.HEADERS])
+            hoja.update('A1:N1', [self.HEADERS])
             print(f"Hoja '{self.NOMBRE_HOJA}' creada con encabezados")
             return hoja
 
     def generar_liquidacion_dia(self, fecha=None):
         """
-        Genera la liquidación cruzando nomina_cali con facturacion para un día
+        Genera la liquidación agrupada por sede
 
         Args:
             fecha: date object, si es None usa fecha actual
@@ -156,6 +159,7 @@ class LiquidacionNominaService:
             return [], f"No hay registros para domingos ({fecha})"
 
         fecha_str = fecha.strftime('%Y-%m-%d')
+        dia_semana = self.DIAS_SEMANA[dia_semana_num]
 
         # Obtener datos
         nomina = self.obtener_nomina_cali(fecha)
@@ -164,14 +168,40 @@ class LiquidacionNominaService:
         if not nomina:
             return [], f"No hay registros en nomina_cali para {fecha_str}"
 
-        # Generar registros cruzados
-        registros = []
+        # Agrupar por sede
+        sedes_agrupadas = defaultdict(lambda: {
+            'supervisor': '',
+            'cantidad_manipuladoras': 0,
+            'total_minutos': 0,
+            'tiene_novedad': False
+        })
+
         for emp in nomina:
             sede = emp.get('DESCRIPCION PROYECTO', '').strip()
-            sede_upper = sede.upper()
+            sede_key = sede.upper()
+
+            # Acumular datos
+            sedes_agrupadas[sede_key]['sede_original'] = sede
+            sedes_agrupadas[sede_key]['supervisor'] = emp.get('SUPERVISOR', '')
+            sedes_agrupadas[sede_key]['cantidad_manipuladoras'] += 1
+
+            # Sumar horas
+            hora_inicial = emp.get('HORA INICIAL', '')
+            hora_final = emp.get('HORA FINAL', '')
+            minutos = self.calcular_horas_en_minutos(hora_inicial, hora_final)
+            sedes_agrupadas[sede_key]['total_minutos'] += minutos
+
+            # Verificar si hay novedad
+            if emp.get('NOVEDAD', '').strip().upper() == 'SI':
+                sedes_agrupadas[sede_key]['tiene_novedad'] = True
+
+        # Generar registros agrupados
+        registros = []
+        for sede_key, datos_sede in sedes_agrupadas.items():
+            sede = datos_sede.get('sede_original', sede_key)
 
             # Buscar facturación de esta sede
-            fact = facturacion.get(sede_upper, {})
+            fact = facturacion.get(sede_key, {})
 
             comp_ampm = fact.get('complemento_ampm', 0)
             comp_pm = fact.get('complemento_pm', 0)
@@ -182,35 +212,35 @@ class LiquidacionNominaService:
             hubo_raciones = 'SI' if total_raciones > 0 else 'NO'
             observacion = '' if total_raciones > 0 else 'ASEO/LIMPIEZA'
 
-            hora_inicial = emp.get('HORA INICIAL', '')
-            hora_final = emp.get('HORA FINAL', '')
-            total_horas = self.calcular_horas(hora_inicial, hora_final)
+            # Verificar novedad (de nomina o facturacion)
+            novedad_nomina = datos_sede['tiene_novedad']
+            novedad_fact = fact.get('novedad_fact', '').strip().upper() == 'SI'
+            novedad = 'SI' if (novedad_nomina or novedad_fact) else ''
 
-            # Obtener NOVEDAD del registro original de nomina_cali
-            novedad = emp.get('NOVEDAD', '')
+            total_horas = self.minutos_a_horas(datos_sede['total_minutos'])
 
             registro = [
-                emp.get('SUPERVISOR', ''),      # SUPERVISOR
-                emp.get('CEDULA', ''),          # CEDULA
-                emp.get('NOMBRE COLABORADOR', ''),  # NOMBRE COLABORADOR
-                sede,                            # SEDE
-                emp.get('FECHA', ''),           # FECHA
-                emp.get('DIA', ''),             # DIA
-                hora_inicial,                    # HORA INICIAL
-                hora_final,                      # HORA FINAL
-                total_horas,                     # TOTAL HORAS
-                hubo_raciones,                   # HUBO_RACIONES
-                comp_ampm,                       # COMPLEMENTO AM/PM
-                comp_pm,                         # COMPLEMENTO PM
-                almuerzo,                        # ALMUERZO JU
-                industrializado,                 # INDUSTRIALIZADO
-                total_raciones,                  # TOTAL RACIONES
-                observacion,                     # OBSERVACION
-                novedad                          # NOVEDAD (del registro original)
+                datos_sede['supervisor'],           # SUPERVISOR
+                sede,                               # SEDE
+                fecha_str,                          # FECHA
+                dia_semana,                         # DIA
+                datos_sede['cantidad_manipuladoras'],  # CANT. MANIPULADORAS
+                total_horas,                        # TOTAL HORAS
+                hubo_raciones,                      # HUBO_RACIONES
+                comp_ampm,                          # COMPLEMENTO AM/PM
+                comp_pm,                            # COMPLEMENTO PM
+                almuerzo,                           # ALMUERZO JU
+                industrializado,                    # INDUSTRIALIZADO
+                total_raciones,                     # TOTAL RACIONES
+                observacion,                        # OBSERVACION
+                novedad                             # NOVEDAD
             ]
             registros.append(registro)
 
-        return registros, f"Generados {len(registros)} registros de liquidación para {fecha_str}"
+        # Ordenar por supervisor y sede
+        registros.sort(key=lambda x: (x[0], x[1]))
+
+        return registros, f"Generados {len(registros)} registros de liquidación (por sede) para {fecha_str}"
 
     def verificar_registros_existentes(self, fecha):
         """Verifica si ya existen registros para una fecha"""
@@ -219,9 +249,9 @@ class LiquidacionNominaService:
 
         fecha_str = fecha.strftime('%Y-%m-%d')
 
-        # Buscar si hay registros con esta fecha (columna 5 = FECHA, índice 4)
+        # Buscar si hay registros con esta fecha (columna 3 = FECHA, índice 2)
         for fila in datos[1:]:  # Skip header
-            if len(fila) > 4 and fila[4] == fecha_str:
+            if len(fila) > 2 and fila[2] == fecha_str:
                 return True
         return False
 
@@ -237,7 +267,7 @@ class LiquidacionNominaService:
         ultima_fila = len(datos_actuales) + 1
 
         # Insertar registros
-        rango = f"A{ultima_fila}:Q{ultima_fila + len(registros) - 1}"
+        rango = f"A{ultima_fila}:N{ultima_fila + len(registros) - 1}"
         hoja.update(values=registros, range_name=rango)
 
         return len(registros)
