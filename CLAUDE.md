@@ -61,7 +61,19 @@ python manage.py nomina_cali_diaria [--fecha YYYY-MM-DD] [--forzar]
 python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email]
 ```
 
-There is no test suite. Testing is done manually by processing files.
+### Running Tests
+
+```bash
+cd web
+
+# Run all tests
+python manage.py test
+
+# Run tecnicos app tests (metrics calculations)
+python manage.py test apps.tecnicos.tests
+```
+
+Tests cover: `_parsear_horas_formato()`, `_safe_float()`, `_parsear_hora()`, and liquidación metrics calculations.
 
 ## Architecture
 
@@ -116,7 +128,10 @@ Manages payroll data through Google Sheets integration.
 - **facturacion_service.py** — Generates daily ration records per sede. Creates records in `facturacion` sheet.
 - **nomina_cali_service.py** — Generates daily records for manipuladoras with schedules from `HORARIOS` sheet.
 - **liquidacion_nomina_service.py** — Crosses `nomina_cali` + `facturacion` to generate payroll liquidation aggregated by sede.
-- **email_service.py** — Sends email notifications via Gmail with liquidation reports.
+- **email_service.py** — Sends email notifications via Gmail SMTP. Reports include:
+  - KPI summary cards (Total Sedes, Manipuladoras, Con Horas, Con Raciones, Inconsistencias)
+  - Breakdown by supervisor with per-sede details (Manipuladoras, Horas, Raciones, Estado)
+  - Color-coded status badges (OK/green, Inconsistencia/red, Novedad/yellow)
 
 #### Google Sheets Structure
 
@@ -144,6 +159,21 @@ Uses `_obtener_datos_filtrados()` helper function for common filtering logic:
 - Filters by supervisor, sede, mes (month)
 - Reads from Google Sheets dynamically
 - Processes rows with custom transformers
+- **Header normalization:** Column names are normalized (uppercase, no spaces/underscores) for matching. Custom row processors must normalize column names when accessing `headers_dict`.
+
+**Liquidación Nómina Metrics:**
+- Días Nómina: Count of records with `TOTAL HORAS > 0`
+- Días Raciones: Count of records with `TOTAL RACIONES > 0`
+- Inconsistencias: Records with hours but no rations OR rations but no hours
+
+**Nómina Cali Features:**
+- Calculates total hours from HORA INICIAL/HORA FINAL
+- Shows supervisor chips with days reported per supervisor
+- Handles nocturnal shifts (entry one day, exit next morning)
+
+**Hour Parsing:**
+- `_parsear_horas_formato()`: Converts "HH:MM" to decimal (e.g., "5:30" → 5.5)
+- `_parsear_hora()`: Parses time strings to datetime objects
 
 ### Templates Structure (`web/templates/`)
 
@@ -173,6 +203,13 @@ static/
 ```
 
 **Important:** Keep CSS/JS separate from HTML templates. Use `{% static 'css/...' %}` in templates.
+
+**Key CSS classes in `supervision.css`:**
+- `.stats-grid` / `.stat-card` — KPI cards with variants: `--info`, `--success`, `--danger`, `--warning`
+- `.supervisor-stats-row` / `.sup-chip` — Horizontal supervisor chips with badges
+- `.filters-card` / `.filters-form` — Filter section styling
+- `.data-table` / `.table-container` — Table with sticky headers and scroll
+- `.row-alert` — Highlighted rows for inconsistencies
 
 ### Configuration (`config.py`)
 
@@ -216,4 +253,8 @@ EMAIL_COORDINADOR=<recipient-email>
 - Nocturnal exit records (00:00–10:00) are paired with the previous day's entry and attributed to the entry date.
 - The shift dict structure includes `es_nocturno`, `completo`, `entrada_inferida`, `salida_inferida`, `salida_corregida`, `nocturno_prospectivo` boolean flags.
 - Dependencies: pandas, openpyxl, xlrd, XlsxWriter, python-dateutil, gspread, google-auth, whitenoise. Python 3.8+.
-- Some sedes in HORARIOS have multiple shifts (AM/PM). Currently `nomina_cali_service` takes only the first schedule found per sede.
+- Some sedes in HORARIOS have multiple shifts (AM/PM). Currently `nomina_cali_service` takes only the first schedule found per sede. 15 sedes have multiple shifts, FENALCO ASTURIAS has 4.
+
+## Known Issues / Pending
+
+- **Multiple schedules per sede:** Need to clarify with stakeholders how to handle sedes with multiple shifts in HORARIOS sheet before implementing proper multi-schedule support.
