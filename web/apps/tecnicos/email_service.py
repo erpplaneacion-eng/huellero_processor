@@ -9,6 +9,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import date
+from collections import defaultdict
 
 
 class EmailService:
@@ -37,30 +38,41 @@ class EmailService:
                 "EMAIL_HOST_PASSWORD, EMAIL_COORDINADOR"
             )
 
-    def enviar_correo(self, destinatario, asunto, cuerpo_html):
-        """
-        Envía un correo electrónico
-
-        Args:
-            destinatario: Email del destinatario
-            asunto: Asunto del correo
-            cuerpo_html: Contenido HTML del correo
-
-        Returns:
-            dict con resultado de la operación
-        """
+    def _parsear_horas(self, valor):
+        """Convierte formato HH:MM a horas decimales"""
         try:
-            # Crear mensaje
+            val_str = str(valor).strip()
+            if not val_str:
+                return 0.0
+            if ':' in val_str:
+                partes = val_str.split(':')
+                horas = int(partes[0]) if partes[0] else 0
+                minutos = int(partes[1]) if len(partes) > 1 and partes[1] else 0
+                return horas + (minutos / 60.0)
+            return float(val_str.replace(',', '.'))
+        except (ValueError, TypeError):
+            return 0.0
+
+    def _safe_int(self, valor):
+        """Convierte a entero de forma segura"""
+        try:
+            if isinstance(valor, int):
+                return valor
+            return int(float(str(valor).replace(',', '.').strip() or 0))
+        except (ValueError, TypeError):
+            return 0
+
+    def enviar_correo(self, destinatario, asunto, cuerpo_html):
+        """Envía un correo electrónico"""
+        try:
             mensaje = MIMEMultipart('alternative')
             mensaje['Subject'] = asunto
             mensaje['From'] = self.email_user
             mensaje['To'] = destinatario
 
-            # Adjuntar cuerpo HTML
             parte_html = MIMEText(cuerpo_html, 'html', 'utf-8')
             mensaje.attach(parte_html)
 
-            # Conectar y enviar
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as servidor:
                 servidor.starttls()
                 servidor.login(self.email_user, self.email_password)
@@ -84,7 +96,7 @@ class EmailService:
 
     def generar_reporte_liquidacion(self, fecha, registros, resultado):
         """
-        Genera el HTML del reporte de liquidación
+        Genera el HTML del reporte de liquidación con desglose por supervisor
 
         Args:
             fecha: date object de la liquidación
@@ -97,32 +109,69 @@ class EmailService:
         dia_semana = self.DIAS_SEMANA.get(fecha.weekday(), '')
         fecha_str = fecha.strftime('%d/%m/%Y')
 
-        # Análisis de registros
-        total_sedes = len(registros)
-        sedes_con_novedad = []
-        sedes_sin_raciones = []
-        total_manipuladoras = 0
-        total_raciones = 0
+        # Estructura de registros:
+        # [SUPERVISOR, SEDE, FECHA, DIA, CANT_MANIP, TOTAL_HORAS,
+        #  HUBO_RACIONES, COMP_AMPM, COMP_PM, ALMUERZO, IND,
+        #  TOTAL_RACIONES, OBSERVACION, NOVEDAD]
+        # Índices: 0=SUP, 1=SEDE, 4=CANT, 5=HORAS, 6=HUBO_RAC, 11=TOT_RAC, 12=OBS, 13=NOV
+
+        # Agrupar por supervisor
+        supervisores = defaultdict(list)
+        totales = {
+            'sedes': 0,
+            'manipuladoras': 0,
+            'raciones': 0,
+            'dias_nomina': 0,
+            'dias_raciones': 0,
+            'inconsistencias': 0
+        }
 
         for reg in registros:
-            # Estructura: [SUPERVISOR, SEDE, FECHA, DIA, CANT_MANIP, TOTAL_HORAS,
-            #              HUBO_RACIONES, COMP_AMPM, COMP_PM, ALMUERZO, IND,
-            #              TOTAL_RACIONES, OBSERVACION, NOVEDAD]
-            sede = reg[1]
-            cant_manip = reg[4] if isinstance(reg[4], int) else 0
-            hubo_raciones = reg[6]
-            raciones = reg[11] if isinstance(reg[11], int) else 0
-            observacion = reg[12]
-            novedad = reg[13]
+            supervisor = reg[0] if len(reg) > 0 else 'Sin Supervisor'
+            sede = reg[1] if len(reg) > 1 else ''
+            cant_manip = self._safe_int(reg[4]) if len(reg) > 4 else 0
+            total_horas = reg[5] if len(reg) > 5 else ''
+            horas_decimal = self._parsear_horas(total_horas)
+            hubo_raciones = reg[6] if len(reg) > 6 else ''
+            total_raciones = self._safe_int(reg[11]) if len(reg) > 11 else 0
+            observacion = reg[12] if len(reg) > 12 else ''
+            novedad = reg[13] if len(reg) > 13 else ''
 
-            total_manipuladoras += cant_manip
-            total_raciones += raciones
+            # Determinar estado
+            tiene_inconsistencia = False
+            tipo_inconsistencia = ''
 
-            if novedad == 'SI':
-                sedes_con_novedad.append(sede)
+            if total_raciones > 0 and horas_decimal == 0:
+                tiene_inconsistencia = True
+                tipo_inconsistencia = 'Raciones sin horas'
+            elif horas_decimal > 0 and total_raciones == 0:
+                tiene_inconsistencia = True
+                tipo_inconsistencia = 'Horas sin raciones'
 
-            if hubo_raciones == 'NO' or observacion == 'ASEO/LIMPIEZA':
-                sedes_sin_raciones.append(sede)
+            # Agregar a supervisor
+            supervisores[supervisor].append({
+                'sede': sede,
+                'manipuladoras': cant_manip,
+                'horas': total_horas,
+                'horas_decimal': horas_decimal,
+                'raciones': total_raciones,
+                'hubo_raciones': hubo_raciones,
+                'observacion': observacion,
+                'novedad': novedad,
+                'inconsistencia': tiene_inconsistencia,
+                'tipo_inconsistencia': tipo_inconsistencia
+            })
+
+            # Acumular totales
+            totales['sedes'] += 1
+            totales['manipuladoras'] += cant_manip
+            totales['raciones'] += total_raciones
+            if horas_decimal > 0:
+                totales['dias_nomina'] += 1
+            if total_raciones > 0:
+                totales['dias_raciones'] += 1
+            if tiene_inconsistencia:
+                totales['inconsistencias'] += 1
 
         # Construir HTML
         html = f"""
@@ -135,73 +184,157 @@ class EmailService:
                     font-family: Arial, sans-serif;
                     line-height: 1.6;
                     color: #333;
-                    max-width: 800px;
+                    max-width: 900px;
                     margin: 0 auto;
                     padding: 20px;
+                    background-color: #f5f5f5;
                 }}
                 .header {{
-                    background-color: #2c5aa0;
+                    background: linear-gradient(135deg, #2c5aa0 0%, #1e3d6f 100%);
                     color: white;
-                    padding: 20px;
+                    padding: 25px;
                     text-align: center;
-                    border-radius: 8px 8px 0 0;
+                    border-radius: 10px 10px 0 0;
+                }}
+                .header h1 {{
+                    margin: 0 0 10px 0;
+                    font-size: 24px;
+                }}
+                .header h2 {{
+                    margin: 0;
+                    font-size: 18px;
+                    font-weight: normal;
+                    opacity: 0.9;
                 }}
                 .content {{
-                    background-color: #f9f9f9;
-                    padding: 20px;
-                    border: 1px solid #ddd;
-                }}
-                .resumen {{
                     background-color: #fff;
-                    padding: 15px;
+                    padding: 25px;
+                    border: 1px solid #ddd;
+                    border-top: none;
+                }}
+                .kpi-grid {{
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 15px;
+                    margin-bottom: 25px;
+                }}
+                .kpi-card {{
+                    flex: 1;
+                    min-width: 120px;
+                    background: #f8f9fa;
                     border-radius: 8px;
-                    margin: 15px 0;
+                    padding: 15px;
+                    text-align: center;
                     border-left: 4px solid #2c5aa0;
                 }}
-                .alerta {{
-                    background-color: #fff3cd;
-                    border-left-color: #ffc107;
-                }}
-                .success {{
-                    background-color: #d4edda;
+                .kpi-card.success {{
                     border-left-color: #28a745;
                 }}
-                table {{
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 15px 0;
+                .kpi-card.warning {{
+                    border-left-color: #ffc107;
                 }}
-                th, td {{
-                    padding: 10px;
-                    text-align: left;
-                    border-bottom: 1px solid #ddd;
+                .kpi-card.danger {{
+                    border-left-color: #dc3545;
                 }}
-                th {{
-                    background-color: #2c5aa0;
-                    color: white;
-                }}
-                tr:nth-child(even) {{
-                    background-color: #f2f2f2;
-                }}
-                .footer {{
-                    text-align: center;
-                    padding: 15px;
-                    color: #666;
-                    font-size: 12px;
-                }}
-                .numero {{
-                    font-size: 24px;
+                .kpi-value {{
+                    font-size: 28px;
                     font-weight: bold;
                     color: #2c5aa0;
                 }}
-                .lista-sedes {{
-                    background-color: #fff;
-                    padding: 10px;
-                    border-radius: 4px;
-                    margin-top: 10px;
+                .kpi-card.success .kpi-value {{
+                    color: #28a745;
                 }}
-                .lista-sedes li {{
-                    margin: 5px 0;
+                .kpi-card.danger .kpi-value {{
+                    color: #dc3545;
+                }}
+                .kpi-label {{
+                    font-size: 12px;
+                    color: #666;
+                    margin-top: 5px;
+                }}
+                .supervisor-section {{
+                    margin: 20px 0;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 8px;
+                    overflow: hidden;
+                }}
+                .supervisor-header {{
+                    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                    padding: 12px 15px;
+                    font-weight: bold;
+                    color: #2c5aa0;
+                    border-bottom: 1px solid #e0e0e0;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }}
+                .supervisor-stats {{
+                    font-size: 12px;
+                    color: #666;
+                    font-weight: normal;
+                }}
+                .sede-table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                }}
+                .sede-table th {{
+                    background-color: #2c5aa0;
+                    color: white;
+                    padding: 10px 8px;
+                    text-align: left;
+                    font-weight: 600;
+                }}
+                .sede-table td {{
+                    padding: 10px 8px;
+                    border-bottom: 1px solid #eee;
+                }}
+                .sede-table tr:nth-child(even) {{
+                    background-color: #f8f9fa;
+                }}
+                .sede-table tr:hover {{
+                    background-color: #e8f4f8;
+                }}
+                .sede-table tr.row-alert {{
+                    background-color: #fff3cd;
+                }}
+                .sede-table tr.row-alert:hover {{
+                    background-color: #ffe8a1;
+                }}
+                .badge {{
+                    display: inline-block;
+                    padding: 3px 8px;
+                    border-radius: 12px;
+                    font-size: 11px;
+                    font-weight: bold;
+                }}
+                .badge-success {{
+                    background-color: #d4edda;
+                    color: #155724;
+                }}
+                .badge-danger {{
+                    background-color: #f8d7da;
+                    color: #721c24;
+                }}
+                .badge-warning {{
+                    background-color: #fff3cd;
+                    color: #856404;
+                }}
+                .text-center {{
+                    text-align: center;
+                }}
+                .text-right {{
+                    text-align: right;
+                }}
+                .footer {{
+                    text-align: center;
+                    padding: 20px;
+                    color: #666;
+                    font-size: 12px;
+                    background-color: #f8f9fa;
+                    border-radius: 0 0 10px 10px;
+                    border: 1px solid #ddd;
+                    border-top: none;
                 }}
             </style>
         </head>
@@ -212,61 +345,88 @@ class EmailService:
             </div>
 
             <div class="content">
-                <div class="resumen success">
-                    <h3>Resumen General</h3>
-                    <table>
-                        <tr>
-                            <td>Total de Sedes</td>
-                            <td class="numero">{total_sedes}</td>
-                        </tr>
-                        <tr>
-                            <td>Total de Manipuladoras</td>
-                            <td class="numero">{total_manipuladoras}</td>
-                        </tr>
-                        <tr>
-                            <td>Total de Raciones</td>
-                            <td class="numero">{total_raciones:,}</td>
-                        </tr>
-                    </table>
+                <!-- KPIs Generales -->
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-value">{totales['sedes']}</div>
+                        <div class="kpi-label">Total Sedes</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-value">{totales['manipuladoras']}</div>
+                        <div class="kpi-label">Manipuladoras</div>
+                    </div>
+                    <div class="kpi-card success">
+                        <div class="kpi-value">{totales['dias_nomina']}</div>
+                        <div class="kpi-label">Con Horas</div>
+                    </div>
+                    <div class="kpi-card success">
+                        <div class="kpi-value">{totales['dias_raciones']}</div>
+                        <div class="kpi-label">Con Raciones</div>
+                    </div>
+                    <div class="kpi-card danger">
+                        <div class="kpi-value">{totales['inconsistencias']}</div>
+                        <div class="kpi-label">Inconsistencias</div>
+                    </div>
                 </div>
+
+                <!-- Detalle por Supervisor -->
+                <h3 style="color: #2c5aa0; border-bottom: 2px solid #2c5aa0; padding-bottom: 10px;">
+                    Detalle por Supervisor
+                </h3>
         """
 
-        # Sedes con novedades
-        if sedes_con_novedad:
+        # Generar sección por cada supervisor
+        for supervisor, sedes in sorted(supervisores.items()):
+            # Calcular stats del supervisor
+            sup_manipuladoras = sum(s['manipuladoras'] for s in sedes)
+            sup_raciones = sum(s['raciones'] for s in sedes)
+            sup_inconsistencias = sum(1 for s in sedes if s['inconsistencia'])
+
             html += f"""
-                <div class="resumen alerta">
-                    <h3>Sedes con Novedades ({len(sedes_con_novedad)})</h3>
-                    <p>Las siguientes sedes reportaron novedades que requieren revisión:</p>
-                    <ul class="lista-sedes">
-            """
-            for sede in sedes_con_novedad:
-                html += f"<li>{sede}</li>"
-            html += """
-                    </ul>
-                </div>
+                <div class="supervisor-section">
+                    <div class="supervisor-header">
+                        <span>{supervisor or 'Sin Supervisor'}</span>
+                        <span class="supervisor-stats">
+                            {len(sedes)} sedes | {sup_manipuladoras} manip. | {sup_raciones:,} raciones
+                            {f' | <span style="color: #dc3545;">{sup_inconsistencias} inconsist.</span>' if sup_inconsistencias > 0 else ''}
+                        </span>
+                    </div>
+                    <table class="sede-table">
+                        <thead>
+                            <tr>
+                                <th>Sede</th>
+                                <th class="text-center">Manip.</th>
+                                <th class="text-center">Horas</th>
+                                <th class="text-center">Raciones</th>
+                                <th class="text-center">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             """
 
-        # Sedes sin raciones (aseo/limpieza)
-        if sedes_sin_raciones:
-            html += f"""
-                <div class="resumen">
-                    <h3>Sedes sin Raciones - Aseo/Limpieza ({len(sedes_sin_raciones)})</h3>
-                    <p>Las siguientes sedes no tuvieron raciones (solo aseo/limpieza):</p>
-                    <ul class="lista-sedes">
-            """
-            for sede in sedes_sin_raciones:
-                html += f"<li>{sede}</li>"
-            html += """
-                    </ul>
-                </div>
-            """
+            for sede_data in sedes:
+                row_class = 'row-alert' if sede_data['inconsistencia'] else ''
 
-        # Si no hay novedades ni sedes sin raciones
-        if not sedes_con_novedad and not sedes_sin_raciones:
+                if sede_data['inconsistencia']:
+                    estado = f'<span class="badge badge-danger">{sede_data["tipo_inconsistencia"]}</span>'
+                elif sede_data['novedad'] == 'SI':
+                    estado = '<span class="badge badge-warning">Novedad</span>'
+                else:
+                    estado = '<span class="badge badge-success">OK</span>'
+
+                html += f"""
+                            <tr class="{row_class}">
+                                <td>{sede_data['sede']}</td>
+                                <td class="text-center">{sede_data['manipuladoras']}</td>
+                                <td class="text-center">{sede_data['horas'] or '-'}</td>
+                                <td class="text-center">{sede_data['raciones']:,}</td>
+                                <td class="text-center">{estado}</td>
+                            </tr>
+                """
+
             html += """
-                <div class="resumen success">
-                    <h3>Sin Novedades</h3>
-                    <p>No se reportaron novedades ni anomalías en el día.</p>
+                        </tbody>
+                    </table>
                 </div>
             """
 
@@ -274,9 +434,9 @@ class EmailService:
             </div>
 
             <div class="footer">
-                <p>Corporación Hacia un Valle Solidario</p>
+                <p><strong>Corporación Hacia un Valle Solidario</strong></p>
                 <p>Este es un correo automático generado por el sistema de liquidación de nómina.</p>
-                <p>Generado: {date.today().strftime('%d/%m/%Y %H:%M')}</p>
+                <p>Generado: {date.today().strftime('%d/%m/%Y')}</p>
             </div>
         </body>
         </html>
@@ -284,23 +444,13 @@ class EmailService:
 
         asunto = f"Liquidación Nómina - {dia_semana} {fecha_str}"
 
-        if sedes_con_novedad:
-            asunto += f" - {len(sedes_con_novedad)} NOVEDADES"
+        if totales['inconsistencias'] > 0:
+            asunto += f" - {totales['inconsistencias']} INCONSISTENCIAS"
 
         return asunto, html
 
     def enviar_reporte_liquidacion(self, fecha, registros, resultado):
-        """
-        Genera y envía el reporte de liquidación al coordinador
-
-        Args:
-            fecha: date object de la liquidación
-            registros: lista de registros generados
-            resultado: dict con resultado de la operación
-
-        Returns:
-            dict con resultado del envío
-        """
+        """Genera y envía el reporte de liquidación al coordinador"""
         asunto, cuerpo_html = self.generar_reporte_liquidacion(
             fecha, registros, resultado
         )
@@ -323,11 +473,9 @@ def enviar_reporte_liquidacion_hoy(registros, resultado):
 
 
 if __name__ == '__main__':
-    # Para probar desde línea de comandos
     from dotenv import load_dotenv
     load_dotenv()
 
-    # Test de conexión
     try:
         service = EmailService()
         print("Configuración de email correcta")
