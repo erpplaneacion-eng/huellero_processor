@@ -1,3 +1,7 @@
+/* ==========================================================================
+   SUPERVISIÓN - Estilos Generales
+   ========================================================================== */
+
 .content-section {
     display: flex;
     flex-direction: column;
@@ -45,6 +49,10 @@
 .alert__icon {
     font-size: 1.25rem;
 }
+
+/* ==========================================================================
+   TABLAS Y DATOS
+   ========================================================================== */
 
 .table-container {
     overflow-x: auto;
@@ -95,4 +103,85 @@
     border-top: 1px solid #dee2e6;
     color: #6c757d;
     font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   DASHBOARD Y TARJETAS
+   ========================================================================== */
+
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.module-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s ease;
+}
+
+.module-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-color: #2c5aa0;
+    background: linear-gradient(135deg, #e7f1ff 0%, #d0e3ff 100%);
+}
+
+.module-card__icon {
+    font-size: 2.5rem;
+    flex-shrink: 0;
+}
+
+.module-card__content {
+    flex: 1;
+}
+
+.module-card__title {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.1rem;
+    color: #2c5aa0;
+}
+
+.module-card__desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.module-card__arrow {
+    font-size: 1.5rem;
+    color: #2c5aa0;
+    opacity: 0.5;
+    transition: all 0.3s ease;
+}
+
+.module-card:hover .module-card__arrow {
+    opacity: 1;
+    transform: translateX(4px);
+}
+
+.info-box {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.info-box p {
+    margin: 0.5rem 0;
 }
