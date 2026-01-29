@@ -82,6 +82,34 @@
     </div>
     {% endif %}
 
+    <!-- Estadísticas -->
+    <div class="stats-grid">
+        <div class="stat-card stat-card--info">
+            <div class="stat-card__header">
+                <span class="stat-card__icon">🕒</span>
+                Días Nómina
+            </div>
+            <div class="stat-card__value">{{ stats.dias_nomina }}</div>
+            <div class="stat-card__desc">Con horas reportadas</div>
+        </div>
+        <div class="stat-card stat-card--success">
+            <div class="stat-card__header">
+                <span class="stat-card__icon">🍲</span>
+                Días Raciones
+            </div>
+            <div class="stat-card__value">{{ stats.dias_raciones }}</div>
+            <div class="stat-card__desc">Con producción reportada</div>
+        </div>
+        <div class="stat-card stat-card--danger">
+            <div class="stat-card__header">
+                <span class="stat-card__icon">⚠️</span>
+                Inconsistencias
+            </div>
+            <div class="stat-card__value">{{ stats.inconsistencias }}</div>
+            <div class="stat-card__desc">Cruce Horas vs Raciones</div>
+        </div>
+    </div>
+
     <div class="card">
         <h2 class="card__title">
             <span class="card__title-icon">📊</span>
@@ -101,9 +129,14 @@
                 </thead>
                 <tbody>
                     {% for row in rows %}
-                        <tr>
-                            {% for cell in row %}
-                                <td>{{ cell }}</td>
+                        <tr class="{% if row.alert %}row-alert{% endif %}" title="{{ row.alert_msg }}">
+                            {% for cell in row.cells %}
+                                <td>
+                                    {% if forloop.first and row.alert %}
+                                        <span class="text-danger mr-1">⚠️</span>
+                                    {% endif %}
+                                    {{ cell }}
+                                </td>
                             {% endfor %}
                         </tr>
                     {% empty %}

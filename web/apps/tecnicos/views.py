@@ -14,6 +14,54 @@ MESES = [
     ('10', 'Octubre'), ('11', 'Noviembre'), ('12', 'Diciembre')
 ]
 
+def _parsear_hora(valor):
+    """Intenta convertir un string de hora a objeto datetime."""
+    formatos = ['%H:%M', '%H:%M:%S', '%I:%M %p', '%I:%M:%S %p']
+    valor = str(valor).strip()
+    if not valor:
+        return None
+    
+    for fmt in formatos:
+        try:
+            return datetime.strptime(valor, fmt)
+        except ValueError:
+            continue
+    return None
+
+def _safe_float(val):
+    """Convierte a float de forma segura, retornando 0.0 si falla."""
+    try:
+        # Reemplazar comas por puntos si es necesario y limpiar espacios
+        limpio = str(val).replace(',', '.').strip()
+        if not limpio: return 0.0
+        return float(limpio)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _parsear_horas_formato(val):
+    """
+    Convierte formato de horas HH:MM o H:MM a horas decimales.
+    Ej: "5:30" -> 5.5, "10:15" -> 10.25, "" -> 0.0
+    También acepta números directos.
+    """
+    try:
+        val_str = str(val).strip()
+        if not val_str:
+            return 0.0
+
+        # Si contiene ":", es formato HH:MM
+        if ':' in val_str:
+            partes = val_str.split(':')
+            horas = int(partes[0]) if partes[0] else 0
+            minutos = int(partes[1]) if len(partes) > 1 and partes[1] else 0
+            return horas + (minutos / 60.0)
+
+        # Intentar como número directo
+        return float(val_str.replace(',', '.'))
+    except (ValueError, TypeError, IndexError):
+        return 0.0
+
 @login_required
 def index(request):
     """
@@ -76,38 +124,58 @@ def _obtener_datos_filtrados(request, nombre_hoja, columnas_map, titulo_vista, c
                 raw_headers = [str(h).strip() for h in raw_data[0]]
                 filas = raw_data[1:]
                 
-                # Mapa de headers a índices para acceso rápido
-                headers_dict = {h.upper(): i for i, h in enumerate(raw_headers)}
+                # Función para normalizar claves (quitar espacios y _ para comparar)
+                def normalizar(txt):
+                    return str(txt).upper().replace(' ', '').replace('_', '').replace('.', '').strip()
+
+                # Mapa de headers normalizado
+                headers_dict = {normalizar(h): i for i, h in enumerate(raw_headers)}
                 
-                # Mapeo de índices para filtros
                 def buscar_idx(claves):
                     for clave in claves:
-                        if clave.upper() in headers_dict:
-                            return headers_dict[clave.upper()]
+                        c_norm = normalizar(clave)
+                        if c_norm in headers_dict:
+                            return headers_dict[c_norm]
+                    # Búsqueda parcial si falla exacta
+                    for h_norm, idx in headers_dict.items():
+                        for clave in claves:
+                            if normalizar(clave) in h_norm:
+                                return idx
                     return -1
 
                 idx_supervisor = buscar_idx(columnas_map.get('supervisor', []))
                 idx_fecha = buscar_idx(columnas_map.get('fecha', []))
                 idx_sede = buscar_idx(columnas_map.get('sede', []))
 
-                # Definir Headers de Salida
                 if headers_manuales:
                     headers = headers_manuales
                 elif columnas_permitidas:
-                    # Usar el nombre exacto solicitado por el usuario, buscando su índice en la hoja
                     headers = []
                     indices_salida = []
                     for cp in columnas_permitidas:
-                        idx = headers_dict.get(cp.upper(), -1)
+                        idx = -1
+                        c_norm = normalizar(cp)
+                        
+                        # Búsqueda directa normalizada
+                        if c_norm in headers_dict:
+                            idx = headers_dict[c_norm]
+                        
+                        # Búsqueda parcial normalizada (fallback)
+                        if idx == -1:
+                            for h_norm, idx_real in headers_dict.items():
+                                if c_norm in h_norm or h_norm in c_norm:
+                                    idx = idx_real
+                                    break
+                        
                         if idx != -1:
                             headers.append(cp)
                             indices_salida.append(idx)
                         else:
-                            # Si no existe, lo agregamos como header pero marcará vacío
                             headers.append(cp)
                             indices_salida.append(-1)
                 else:
                     headers = raw_headers
+                    indices_salida = list(range(len(raw_headers)))
 
                 # Procesar filas
                 for fila in filas:
@@ -184,6 +252,63 @@ def liquidacion_nomina(request):
         'Liquidación Nómina',
         columnas_permitidas=columnas
     )
+
+    rows_raw = context.get('rows', [])
+    rows_processed = [] # Lista de diccionarios con metadatos
+    
+    stats = {
+        'dias_nomina': 0,
+        'dias_raciones': 0,
+        'inconsistencias': 0
+    }
+
+    if rows_raw:
+        # Mapeo de columnas por nombre para mayor robustez
+        # columnas = ['SUPERVISOR', 'SEDE', 'FECHA', 'DIA', 'CANT. MANIPULADORAS',
+        #             'TOTAL HORAS', 'HUBO_RACIONES', 'TOTAL RACIONES', 'OBSERVACION', 'NOVEDAD']
+        idx_cant_man = 4      # CANT. MANIPULADORAS
+        idx_tot_horas = 5     # TOTAL HORAS (formato HH:MM)
+        idx_tot_rac = 7       # TOTAL RACIONES
+
+        for r in rows_raw:
+            # Obtener valores con manejo seguro de índices
+            cant_man = _safe_float(r[idx_cant_man]) if len(r) > idx_cant_man else 0.0
+            # TOTAL HORAS viene en formato "HH:MM", usar parser especial
+            horas = _parsear_horas_formato(r[idx_tot_horas]) if len(r) > idx_tot_horas else 0.0
+            raciones = _safe_float(r[idx_tot_rac]) if len(r) > idx_tot_rac else 0.0
+
+            # Metrica 1: Días con Nómina
+            if horas > 0:
+                stats['dias_nomina'] += 1
+            
+            # Metrica 2: Días con Raciones
+            if raciones > 0:
+                stats['dias_raciones'] += 1
+            
+            # Metrica 3: Inconsistencias (Cruce)
+            tiene_alerta = False
+            tipo_alerta = ""
+            
+            # Solo marcar alerta si hay datos significativos (evitar 0 vs 0)
+            if raciones > 0 and horas == 0:
+                tiene_alerta = True
+                stats['inconsistencias'] += 1
+                tipo_alerta = "Producción sin horas registradas"
+            elif horas > 0 and raciones == 0:
+                tiene_alerta = True
+                stats['inconsistencias'] += 1
+                tipo_alerta = "Horas registradas sin producción"
+
+            # Empaquetar fila
+            rows_processed.append({
+                'cells': r,
+                'alert': tiene_alerta,
+                'alert_msg': tipo_alerta
+            })
+
+    # Reemplazar rows planos por rows procesados
+    context['rows'] = rows_processed
+    context['stats'] = stats
     return render(request, 'tecnicos/liquidacion_nomina.html', context)
 
 @login_required

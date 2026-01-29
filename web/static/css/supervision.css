@@ -278,6 +278,107 @@
 }
 
 /* ==========================================================================
+   ESTADÍSTICAS / STATS CARDS
+   ========================================================================== */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.25rem;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.stat-card__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card__icon {
+    font-size: 1.25rem;
+}
+
+.stat-card__value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.stat-card__desc {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+/* Variantes de color */
+.stat-card--info {
+    border-left: 4px solid #17a2b8;
+}
+
+.stat-card--info .stat-card__value {
+    color: #17a2b8;
+}
+
+.stat-card--success {
+    border-left: 4px solid #28a745;
+}
+
+.stat-card--success .stat-card__value {
+    color: #28a745;
+}
+
+.stat-card--danger {
+    border-left: 4px solid #dc3545;
+}
+
+.stat-card--danger .stat-card__value {
+    color: #dc3545;
+}
+
+.stat-card--warning {
+    border-left: 4px solid #ffc107;
+}
+
+.stat-card--warning .stat-card__value {
+    color: #856404;
+}
+
+/* Filas con alerta */
+.row-alert {
+    background-color: #fff3cd !important;
+}
+
+.row-alert:hover {
+    background-color: #ffe8a1 !important;
+}
+
+.text-danger {
+    color: #dc3545;
+}
+
+.mr-1 {
+    margin-right: 0.25rem;
+}
+
+/* ==========================================================================
    RESPONSIVE / MEDIA QUERIES
    ========================================================================== */
 

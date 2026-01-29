@@ -45,6 +45,22 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+### Nómina Management Commands
+
+```bash
+cd web
+
+# Generate daily facturacion records (run at 8 AM)
+python manage.py facturacion_diaria [--fecha YYYY-MM-DD] [--forzar]
+
+# Generate daily nomina_cali records (run at 8 AM)
+python manage.py nomina_cali_diaria [--fecha YYYY-MM-DD] [--forzar]
+
+# Generate liquidacion_nomina crossing nomina_cali + facturacion (run at 10 PM)
+# Also sends email notification to coordinator
+python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email]
+```
+
 There is no test suite. Testing is done manually by processing files.
 
 ## Architecture
@@ -70,14 +86,93 @@ Input Excel → DataCleaner → StateInference → ShiftBuilder → Calculator �
 
 Browser-based interface for file upload and processing. Deployed to Railway.
 
-- **apps/users/** — Authentication with role-based access (Logística, Supervisión, Admin, etc.)
+#### Apps Structure
+
+- **apps/users/** — Authentication with role-based access (Logística, Supervisión, Admin, etc.). Users with area "supervision" are redirected to `/supervision/`.
 - **apps/logistica/** — File upload UI and processing API. Uses `processor.py` to wrap the core pipeline.
+- **apps/tecnicos/** — Nómina management module with Google Sheets integration. Accessible via `/supervision/` URL.
 - **huellero_web/settings.py** — Django config with Railway deployment support, PostgreSQL in production, SQLite in development.
 
-Key endpoints:
+#### Key Endpoints
+
+**Logística (`/logistica/`):**
 - `/logistica/` — Main dashboard (requires login)
 - `/logistica/api/procesar/` — POST endpoint for file processing
 - `/logistica/api/descargar/<filename>/` — Download generated reports
+
+**Supervisión (`/supervision/`):**
+- `/supervision/` — Dashboard with module links
+- `/supervision/liquidacion-nomina/` — View liquidacion_nomina Google Sheet
+- `/supervision/nomina-cali/` — View nomina_cali Google Sheet with hour calculations
+- `/supervision/facturacion/` — View facturacion Google Sheet
+
+### App Tecnicos (`web/apps/tecnicos/`)
+
+Manages payroll data through Google Sheets integration.
+
+#### Services
+
+- **google_sheets.py** — Connection service for Google Sheets API using gspread. Requires `credentials/nomina.json` service account file.
+- **facturacion_service.py** — Generates daily ration records per sede. Creates records in `facturacion` sheet.
+- **nomina_cali_service.py** — Generates daily records for manipuladoras with schedules from `HORARIOS` sheet.
+- **liquidacion_nomina_service.py** — Crosses `nomina_cali` + `facturacion` to generate payroll liquidation aggregated by sede.
+- **email_service.py** — Sends email notifications via Gmail with liquidation reports.
+
+#### Google Sheets Structure
+
+The system reads/writes to a Google Sheets workbook with these sheets:
+
+| Sheet | Purpose |
+|-------|---------|
+| `Sedes` | Master list of sedes with ration quotas |
+| `Manipuladoras` | Employee list with Estado (activo/inactivo), sede, supervisor |
+| `HORARIOS` | Work schedules per sede (some sedes have multiple shifts) |
+| `sedes_supevisor` | Supervisor-sede assignments with email |
+| `facturacion` | Daily ration records per sede (generated at 8 AM) |
+| `nomina_cali` | Daily manipuladora records with hours (generated at 8 AM) |
+| `liquidacion_nomina` | Aggregated payroll by sede (generated at 10 PM) |
+
+#### Daily Workflow
+
+1. **8:00 AM** — `facturacion_diaria` and `nomina_cali_diaria` create default records
+2. **During day** — Supervisors edit via AppSheet, mark NOVEDAD=SI for changes
+3. **10:00 PM** — `liquidacion_nomina_diaria` crosses data, generates liquidation, sends email
+
+#### Views (`views.py`)
+
+Uses `_obtener_datos_filtrados()` helper function for common filtering logic:
+- Filters by supervisor, sede, mes (month)
+- Reads from Google Sheets dynamically
+- Processes rows with custom transformers
+
+### Templates Structure (`web/templates/`)
+
+```
+templates/
+├── base.html                    # Base template with container and footer
+├── users/
+│   └── login.html              # Login form
+├── logistica/
+│   └── index.html              # File upload interface
+└── tecnicos/
+    ├── index.html              # Supervisión dashboard
+    ├── liquidacion_nomina.html # Liquidación view with stats
+    ├── nomina_cali.html        # Nómina Cali view
+    └── facturacion.html        # Facturación view
+```
+
+### Static Files (`web/static/`)
+
+```
+static/
+├── css/
+│   ├── styles.css       # Global styles (logística, login)
+│   └── supervision.css  # Supervisión module styles
+└── js/
+    └── app.js           # Logística file upload logic
+```
+
+**Important:** Keep CSS/JS separate from HTML templates. Use `{% static 'css/...' %}` in templates.
 
 ### Configuration (`config.py`)
 
@@ -88,12 +183,30 @@ All thresholds, time ranges, feature flags, directory paths, and format strings 
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`
 
+### Environment Variables (`web/.env`)
+
+```env
+# Google Sheets
+GOOGLE_CREDENTIALS_FILE=credentials/nomina.json
+GOOGLE_SHEET_ID=<spreadsheet-id>
+
+# Django
+DEBUG=True
+SECRET_KEY=<secret-key>
+
+# Email Gmail (notifications)
+EMAIL_HOST_USER=<gmail-address>
+EMAIL_HOST_PASSWORD=<app-password-16-chars>
+EMAIL_COORDINADOR=<recipient-email>
+```
+
 ### Data directories
 
 - `data/input/` — Place source `.xls`/`.xlsx` files here
 - `data/output/` — Generated reports land here
 - `data/maestro/` — Optional employee master file (CODIGO, NOMBRE, DOCUMENTO, CARGO)
 - `logs/` — Processing logs (`procesamiento_YYYYMMDD_HHMMSS.log`)
+- `web/credentials/` — Google service account JSON file
 
 ## Key Implementation Details
 
@@ -102,4 +215,5 @@ All thresholds, time ranges, feature flags, directory paths, and format strings 
 - Observations are pipe-separated (`|`) when multiple apply to one shift.
 - Nocturnal exit records (00:00–10:00) are paired with the previous day's entry and attributed to the entry date.
 - The shift dict structure includes `es_nocturno`, `completo`, `entrada_inferida`, `salida_inferida`, `salida_corregida`, `nocturno_prospectivo` boolean flags.
-- Dependencies: pandas, openpyxl, xlrd, XlsxWriter, python-dateutil. Python 3.8+.
+- Dependencies: pandas, openpyxl, xlrd, XlsxWriter, python-dateutil, gspread, google-auth, whitenoise. Python 3.8+.
+- Some sedes in HORARIOS have multiple shifts (AM/PM). Currently `nomina_cali_service` takes only the first schedule found per sede.
