@@ -4,6 +4,7 @@ Corporación Hacia un Valle Solidario
 """
 
 import os
+import json
 import gspread
 from google.oauth2.service_account import Credentials
 from pathlib import Path
@@ -24,32 +25,49 @@ class GoogleSheetsService:
         self._conectar()
 
     def _conectar(self):
-        """Establece conexión con Google Sheets API"""
+        """
+        Establece conexión con Google Sheets API
+
+        Soporta dos métodos de autenticación:
+        1. GOOGLE_CREDENTIALS_JSON: Variable de entorno con el JSON completo (Railway)
+        2. GOOGLE_CREDENTIALS_FILE: Ruta a archivo de credenciales (desarrollo local)
+        """
         try:
-            # Ruta al archivo de credenciales
-            credentials_file = os.environ.get(
-                'GOOGLE_CREDENTIALS_FILE',
-                'credentials/nomina.json'
-            )
+            # Método 1: Credenciales desde variable de entorno (Railway/Producción)
+            credentials_json = os.environ.get('GOOGLE_CREDENTIALS_JSON')
 
-            # Construir ruta absoluta desde BASE_DIR
-            credentials_path = Path(settings.BASE_DIR) / credentials_file
-
-            if not credentials_path.exists():
-                raise FileNotFoundError(
-                    f"Archivo de credenciales no encontrado: {credentials_path}"
+            if credentials_json:
+                credentials_info = json.loads(credentials_json)
+                self.credentials = Credentials.from_service_account_info(
+                    credentials_info,
+                    scopes=self.SCOPES
+                )
+                print("Conexion a Google Sheets exitosa (via env variable)")
+            else:
+                # Método 2: Credenciales desde archivo (desarrollo local)
+                credentials_file = os.environ.get(
+                    'GOOGLE_CREDENTIALS_FILE',
+                    'credentials/nomina.json'
                 )
 
-            # Cargar credenciales
-            self.credentials = Credentials.from_service_account_file(
-                str(credentials_path),
-                scopes=self.SCOPES
-            )
+                # Construir ruta absoluta desde BASE_DIR
+                credentials_path = Path(settings.BASE_DIR) / credentials_file
+
+                if not credentials_path.exists():
+                    raise FileNotFoundError(
+                        f"Archivo de credenciales no encontrado: {credentials_path}\n"
+                        f"Configure GOOGLE_CREDENTIALS_JSON o GOOGLE_CREDENTIALS_FILE"
+                    )
+
+                # Cargar credenciales desde archivo
+                self.credentials = Credentials.from_service_account_file(
+                    str(credentials_path),
+                    scopes=self.SCOPES
+                )
+                print("Conexion a Google Sheets exitosa (via file)")
 
             # Crear cliente de gspread
             self.client = gspread.authorize(self.credentials)
-
-            print(f"Conexion a Google Sheets exitosa")
 
         except Exception as e:
             print(f"Error al conectar con Google Sheets: {e}")

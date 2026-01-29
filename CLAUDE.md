@@ -71,6 +71,12 @@ python manage.py test
 
 # Run tecnicos app tests (metrics calculations)
 python manage.py test apps.tecnicos.tests
+
+# Run a single test class
+python manage.py test apps.tecnicos.tests.TestParsearHorasFormato
+
+# Run a single test method
+python manage.py test apps.tecnicos.tests.TestParsearHorasFormato.test_formato_horas_minutos
 ```
 
 Tests cover: `_parsear_horas_formato()`, `_safe_float()`, `_parsear_hora()`, and liquidación metrics calculations.
@@ -216,7 +222,7 @@ static/
 All thresholds, time ranges, feature flags, directory paths, and format strings are centralized here. Key settings:
 - `UMBRAL_DUPLICADOS` (900s / 15 min) — duplicate detection window, keeps LAST record
 - `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — hour ranges for time-based state inference
-- `HORA_INICIO_TURNO_NOCTURNO` (15.5 / 15:30) — nocturnal shift detection threshold
+- `HORA_INICIO_TURNO_NOCTURNO` (17.5 / 17:30) — nocturnal shift detection threshold
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`
 

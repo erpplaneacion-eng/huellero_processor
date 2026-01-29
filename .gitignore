@@ -59,6 +59,14 @@ db.sqlite3
 .env
 web/.env
 
+# Credentials (Google Service Account)
+credentials/
+web/credentials/
+*.json
+!package.json
+!package-lock.json
+!railway.json
+
 # Sistema
 .DS_Store
 Thumbs.db
