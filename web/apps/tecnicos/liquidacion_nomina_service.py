@@ -41,7 +41,8 @@ class LiquidacionNominaService:
         'ALMUERZO JU',
         'INDUSTRIALIZADO',
         'TOTAL RACIONES',
-        'OBSERVACION'
+        'OBSERVACION',
+        'NOVEDAD'
     ]
 
     def __init__(self):
@@ -132,7 +133,7 @@ class LiquidacionNominaService:
                 cols=len(self.HEADERS)
             )
             # Agregar encabezados
-            hoja.update('A1:P1', [self.HEADERS])
+            hoja.update('A1:Q1', [self.HEADERS])
             print(f"Hoja '{self.NOMBRE_HOJA}' creada con encabezados")
             return hoja
 
@@ -185,6 +186,9 @@ class LiquidacionNominaService:
             hora_final = emp.get('HORA FINAL', '')
             total_horas = self.calcular_horas(hora_inicial, hora_final)
 
+            # Obtener NOVEDAD del registro original de nomina_cali
+            novedad = emp.get('NOVEDAD', '')
+
             registro = [
                 emp.get('SUPERVISOR', ''),      # SUPERVISOR
                 emp.get('CEDULA', ''),          # CEDULA
@@ -201,7 +205,8 @@ class LiquidacionNominaService:
                 almuerzo,                        # ALMUERZO JU
                 industrializado,                 # INDUSTRIALIZADO
                 total_raciones,                  # TOTAL RACIONES
-                observacion                      # OBSERVACION
+                observacion,                     # OBSERVACION
+                novedad                          # NOVEDAD (del registro original)
             ]
             registros.append(registro)
 
@@ -232,7 +237,7 @@ class LiquidacionNominaService:
         ultima_fila = len(datos_actuales) + 1
 
         # Insertar registros
-        rango = f"A{ultima_fila}:P{ultima_fila + len(registros) - 1}"
+        rango = f"A{ultima_fila}:Q{ultima_fila + len(registros) - 1}"
         hoja.update(values=registros, range_name=rango)
 
         return len(registros)

@@ -39,7 +39,8 @@ class NominaCaliService:
         'FECHA',
         'DIA',
         'HORA INICIAL',
-        'HORA FINAL'
+        'HORA FINAL',
+        'NOVEDAD'
     ]
 
     def __init__(self):
@@ -106,7 +107,7 @@ class NominaCaliService:
                 cols=len(self.HEADERS)
             )
             # Agregar encabezados
-            hoja.update('A1:K1', [self.HEADERS])
+            hoja.update('A1:L1', [self.HEADERS])
             print(f"Hoja '{self.NOMBRE_HOJA}' creada con encabezados")
             return hoja
 
@@ -172,7 +173,8 @@ class NominaCaliService:
                 fecha_str,                  # FECHA
                 dia_semana,                 # DIA
                 hora_entrada,               # HORA INICIAL
-                hora_salida                 # HORA FINAL
+                hora_salida,                # HORA FINAL
+                ''                          # NOVEDAD (vacío por defecto)
             ]
             registros.append(registro)
 
@@ -203,7 +205,7 @@ class NominaCaliService:
         ultima_fila = len(datos_actuales) + 1
 
         # Insertar registros
-        rango = f"A{ultima_fila}:K{ultima_fila + len(registros) - 1}"
+        rango = f"A{ultima_fila}:L{ultima_fila + len(registros) - 1}"
         hoja.update(values=registros, range_name=rango)
 
         return len(registros)

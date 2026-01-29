@@ -118,7 +118,8 @@ class FacturacionService:
                 comp_ampm,
                 comp_pm,
                 almuerzo,
-                comp_ind
+                comp_ind,
+                ''  # NOVEDAD (vacío por defecto)
             ]
             registros.append(registro)
 
@@ -149,7 +150,7 @@ class FacturacionService:
         ultima_fila = len(datos_actuales) + 1
 
         # Insertar registros
-        rango = f"A{ultima_fila}:K{ultima_fila + len(registros) - 1}"
+        rango = f"A{ultima_fila}:L{ultima_fila + len(registros) - 1}"
         hoja_fact.update(values=registros, range_name=rango)
 
         return len(registros)
