@@ -37,6 +37,13 @@ body {
     padding: 2rem 1rem;
 }
 
+.container-fluid {
+    max-width: 1400px; /* Ancho máximo razonable para pantallas grandes */
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    width: 100%;
+}
+
 /* ========== HEADER ========== */
 .header {
     text-align: center;
