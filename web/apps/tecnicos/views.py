@@ -1,7 +1,12 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from django.http import JsonResponse
 from .google_sheets import GoogleSheetsService
 import logging
+import json
+import os
 from datetime import datetime, timedelta
 from collections import defaultdict
 
@@ -74,19 +79,6 @@ def index(request):
     }
     return render(request, 'tecnicos/index.html', context)
 
-def _parsear_hora(valor):
-    """Intenta convertir un string de hora a objeto datetime."""
-    formatos = ['%H:%M', '%H:%M:%S', '%I:%M %p', '%I:%M:%S %p']
-    valor = str(valor).strip()
-    if not valor:
-        return None
-    
-    for fmt in formatos:
-        try:
-            return datetime.strptime(valor, fmt)
-        except ValueError:
-            continue
-    return None
 
 def _obtener_datos_filtrados(request, nombre_hoja, columnas_map, titulo_vista, columnas_permitidas=None, procesador_fila=None, headers_manuales=None):
     """
@@ -544,13 +536,13 @@ def nomina_cali(request):
 def facturacion(request):
     """Vista para Facturación"""
     columnas = [
-        'SEDE_EDUCATIVA', 'FECHA', 'DIA', 'SUPERVISOR', 
-        'COMPLEMENTO_AM_PM_PREPARADO', 'COMPLEMENTO_PM_PREPARADO', 
+        'SEDE_EDUCATIVA', 'FECHA', 'DIA', 'SUPERVISOR',
+        'COMPLEMENTO_AM_PM_PREPARADO', 'COMPLEMENTO_PM_PREPARADO',
         'ALMUERZO_JORNADA_UNICA', 'COMPLEMENTO_AM_PM_INDUSTRIALIZADO', 'NOVEDAD'
     ]
     context = _obtener_datos_filtrados(
-        request, 
-        'facturacion', 
+        request,
+        'facturacion',
         {
             'supervisor': ['SUPERVISOR'],
             'fecha': ['FECHA'],
@@ -560,3 +552,132 @@ def facturacion(request):
         columnas_permitidas=columnas
     )
     return render(request, 'tecnicos/facturacion.html', context)
+
+
+# =============================================================================
+# WEBHOOK PARA APPSHEET - NOVEDADES
+# =============================================================================
+
+# Token secreto para validar requests (configurar en .env)
+WEBHOOK_SECRET_TOKEN = os.environ.get('WEBHOOK_SECRET_TOKEN', 'chvs-webhook-secret-2024')
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def webhook_novedad_nomina(request):
+    """
+    Webhook que recibe notificaciones de AppSheet cuando se marca NOVEDAD=SI
+    en la hoja nomina_cali.
+
+    Crea un registro en la hoja 'novedades_cali'.
+
+    Esperamos un JSON con la estructura:
+    {
+        "token": "secret-token",
+        "data": {
+            "SUPERVISOR": "...",
+            "DESCRIPCION_PROYECTO": "...",
+            "CEDULA": "...",
+            "NOMBRE_COLABORADOR": "...",
+            "FECHA": "...",
+            "DIA": "...",
+            "HORA_INICIAL": "...",
+            "HORA_FINAL": "...",
+            "NOVEDAD": "SI",
+            "OBSERVACION": "..."
+        }
+    }
+    """
+    try:
+        # Parsear JSON del body
+        try:
+            payload = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'JSON inválido'
+            }, status=400)
+
+        # Validar token de seguridad
+        token = payload.get('token', '')
+        if token != WEBHOOK_SECRET_TOKEN:
+            logger.warning(f"Webhook rechazado: token inválido")
+            return JsonResponse({
+                'success': False,
+                'error': 'Token inválido'
+            }, status=401)
+
+        # Obtener datos del registro
+        data = payload.get('data', {})
+        if not data:
+            return JsonResponse({
+                'success': False,
+                'error': 'No se recibieron datos'
+            }, status=400)
+
+        # Verificar que NOVEDAD sea SI
+        novedad = str(data.get('NOVEDAD', '')).strip().upper()
+        if novedad != 'SI':
+            return JsonResponse({
+                'success': False,
+                'error': 'Solo se procesan registros con NOVEDAD=SI'
+            }, status=400)
+
+        # Conectar a Google Sheets
+        service = GoogleSheetsService()
+        libro = service.abrir_libro()
+
+        # Obtener o crear la hoja novedades_cali
+        nombre_hoja = 'novedades_cali'
+        try:
+            hoja_novedades = service.obtener_hoja(libro, nombre_hoja=nombre_hoja)
+        except Exception:
+            # La hoja no existe, crearla
+            hoja_novedades = libro.add_worksheet(title=nombre_hoja, rows=1000, cols=15)
+            # Agregar headers
+            headers = [
+                'FECHA_REGISTRO', 'SUPERVISOR', 'SEDE', 'CEDULA',
+                'NOMBRE_COLABORADOR', 'FECHA', 'DIA', 'HORA_INICIAL',
+                'HORA_FINAL', 'OBSERVACION', 'ESTADO', 'PROCESADO_POR'
+            ]
+            hoja_novedades.update('A1:L1', [headers])
+            logger.info(f"Hoja '{nombre_hoja}' creada exitosamente")
+
+        # Preparar la fila a insertar
+        fecha_registro = datetime.now().strftime('%d/%m/%Y %H:%M')
+        nueva_fila = [
+            fecha_registro,
+            data.get('SUPERVISOR', ''),
+            data.get('DESCRIPCION_PROYECTO', data.get('SEDE', '')),
+            data.get('CEDULA', ''),
+            data.get('NOMBRE_COLABORADOR', ''),
+            data.get('FECHA', ''),
+            data.get('DIA', ''),
+            data.get('HORA_INICIAL', ''),
+            data.get('HORA_FINAL', ''),
+            data.get('OBSERVACION', ''),
+            'PENDIENTE',  # Estado inicial
+            'AppSheet'    # Procesado por
+        ]
+
+        # Insertar la fila
+        service.agregar_fila(hoja_novedades, nueva_fila)
+
+        logger.info(f"Novedad registrada: {data.get('NOMBRE_COLABORADOR', 'N/A')} - {data.get('FECHA', 'N/A')}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Novedad registrada exitosamente',
+            'data': {
+                'colaborador': data.get('NOMBRE_COLABORADOR', ''),
+                'fecha': data.get('FECHA', ''),
+                'sede': data.get('DESCRIPCION_PROYECTO', data.get('SEDE', ''))
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Error en webhook_novedad_nomina: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
