@@ -235,16 +235,128 @@ def _obtener_datos_filtrados(request, nombre_hoja, columnas_map, titulo_vista, c
         'meses': MESES
     }
 
+def _obtener_novedades_hoja(service, libro, nombre_hoja, filtro_mes='', filtro_supervisor='', filtro_sede='', col_supervisor='SUPERVISOR', col_sede='SEDE'):
+    """
+    Obtiene las novedades de una hoja específica.
+    Retorna un dict con 'cantidad' y 'fechas' (lista de fechas únicas con novedad).
+
+    Args:
+        service: GoogleSheetsService instance
+        libro: Spreadsheet object
+        nombre_hoja: Nombre de la hoja a consultar
+        filtro_mes: Filtro por mes (01-12)
+        filtro_supervisor: Filtro por supervisor (búsqueda parcial)
+        filtro_sede: Filtro por sede (búsqueda parcial)
+        col_supervisor: Nombre de la columna de supervisor en esta hoja
+        col_sede: Nombre de la columna de sede en esta hoja
+    """
+    resultado = {'cantidad': 0, 'fechas': []}
+
+    try:
+        hoja = None
+        try:
+            hoja = service.obtener_hoja(libro, nombre_hoja=nombre_hoja)
+        except Exception:
+            for h in libro.worksheets():
+                if nombre_hoja.lower() in h.title.lower():
+                    hoja = h
+                    break
+
+        if not hoja:
+            return resultado
+
+        raw_data = service.leer_datos(hoja)
+        if not raw_data or len(raw_data) < 2:
+            return resultado
+
+        raw_headers = [str(h).strip() for h in raw_data[0]]
+        filas = raw_data[1:]
+
+        # Normalizar headers
+        def normalizar(txt):
+            return str(txt).upper().replace(' ', '').replace('_', '').replace('.', '').strip()
+
+        headers_dict = {normalizar(h): i for i, h in enumerate(raw_headers)}
+
+        # Buscar índices de columnas necesarias
+        idx_novedad = headers_dict.get('NOVEDAD', -1)
+        idx_fecha = headers_dict.get('FECHA', -1)
+        idx_supervisor = headers_dict.get(normalizar(col_supervisor), -1)
+        idx_sede = headers_dict.get(normalizar(col_sede), -1)
+
+        if idx_novedad == -1:
+            return resultado
+
+        fechas_con_novedad = set()
+        cantidad = 0
+
+        for fila in filas:
+            if len(fila) <= idx_novedad:
+                continue
+
+            novedad_val = str(fila[idx_novedad]).strip().upper()
+
+            # Verificar si tiene novedad (SI, S, 1, TRUE, o cualquier valor no vacío distinto de NO/N/0/FALSE)
+            tiene_novedad = novedad_val and novedad_val not in ('', 'NO', 'N', '0', 'FALSE')
+
+            if not tiene_novedad:
+                continue
+
+            # Aplicar filtro por supervisor
+            if filtro_supervisor and idx_supervisor != -1:
+                val_sup = str(fila[idx_supervisor]).lower() if len(fila) > idx_supervisor else ''
+                if filtro_supervisor not in val_sup:
+                    continue
+
+            # Aplicar filtro por sede
+            if filtro_sede and idx_sede != -1:
+                val_sede = str(fila[idx_sede]).lower() if len(fila) > idx_sede else ''
+                if filtro_sede not in val_sede:
+                    continue
+
+            # Aplicar filtro por mes
+            if filtro_mes and idx_fecha != -1 and len(fila) > idx_fecha:
+                val_fecha = str(fila[idx_fecha])
+                mes_fila = ''
+                try:
+                    if '/' in val_fecha:
+                        parts = val_fecha.split('/')
+                        if len(parts) >= 2: mes_fila = parts[1]
+                    elif '-' in val_fecha:
+                        parts = val_fecha.split('-')
+                        if len(parts) >= 2: mes_fila = parts[1]
+                except:
+                    pass
+
+                if mes_fila.lstrip('0') != filtro_mes.lstrip('0'):
+                    continue
+
+            # Pasó todos los filtros, contar
+            cantidad += 1
+            if idx_fecha != -1 and len(fila) > idx_fecha:
+                fecha = str(fila[idx_fecha]).strip()
+                if fecha:
+                    fechas_con_novedad.add(fecha)
+
+        resultado['cantidad'] = cantidad
+        resultado['fechas'] = sorted(list(fechas_con_novedad))
+
+    except Exception as e:
+        logger.error(f"Error obteniendo novedades de {nombre_hoja}: {e}")
+
+    return resultado
+
+
 @login_required
 def liquidacion_nomina(request):
     """Vista para Liquidación Nómina"""
     columnas = [
-        'SUPERVISOR', 'SEDE', 'FECHA', 'DIA', 'CANT. MANIPULADORAS', 
+        'SUPERVISOR', 'SEDE', 'FECHA', 'DIA', 'CANT. MANIPULADORAS',
         'TOTAL HORAS', 'HUBO_RACIONES', 'TOTAL RACIONES', 'OBSERVACION', 'NOVEDAD'
     ]
     context = _obtener_datos_filtrados(
-        request, 
-        'liquidacion_nomina', 
+        request,
+        'liquidacion_nomina',
         {
             'supervisor': ['SUPERVISOR'],
             'fecha': ['FECHA'],
@@ -256,12 +368,43 @@ def liquidacion_nomina(request):
 
     rows_raw = context.get('rows', [])
     rows_processed = [] # Lista de diccionarios con metadatos
-    
+
     stats = {
         'dias_nomina': 0,
         'dias_raciones': 0,
         'inconsistencias': 0
     }
+
+    # Obtener novedades de nomina_cali y facturacion
+    filtro_mes = request.GET.get('mes', '')
+    filtro_supervisor = request.GET.get('supervisor', '').strip().lower()
+    filtro_sede = request.GET.get('sede', '').strip().lower()
+    novedades_nomina = {'cantidad': 0, 'fechas': []}
+    novedades_facturacion = {'cantidad': 0, 'fechas': []}
+
+    try:
+        service = GoogleSheetsService()
+        libro = service.abrir_libro()
+        # nomina_cali usa SUPERVISOR y DESCRIPCION PROYECTO
+        novedades_nomina = _obtener_novedades_hoja(
+            service, libro, 'nomina_cali',
+            filtro_mes=filtro_mes,
+            filtro_supervisor=filtro_supervisor,
+            filtro_sede=filtro_sede,
+            col_supervisor='SUPERVISOR',
+            col_sede='DESCRIPCION PROYECTO'
+        )
+        # facturacion usa SUPERVISOR y SEDE_EDUCATIVA
+        novedades_facturacion = _obtener_novedades_hoja(
+            service, libro, 'facturacion',
+            filtro_mes=filtro_mes,
+            filtro_supervisor=filtro_supervisor,
+            filtro_sede=filtro_sede,
+            col_supervisor='SUPERVISOR',
+            col_sede='SEDE_EDUCATIVA'
+        )
+    except Exception as e:
+        logger.error(f"Error obteniendo novedades: {e}")
 
     if rows_raw:
         # Mapeo de columnas por nombre para mayor robustez
@@ -281,15 +424,15 @@ def liquidacion_nomina(request):
             # Metrica 1: Días con Nómina
             if horas > 0:
                 stats['dias_nomina'] += 1
-            
+
             # Metrica 2: Días con Raciones
             if raciones > 0:
                 stats['dias_raciones'] += 1
-            
+
             # Metrica 3: Inconsistencias (Cruce)
             tiene_alerta = False
             tipo_alerta = ""
-            
+
             # Solo marcar alerta si hay datos significativos (evitar 0 vs 0)
             if raciones > 0 and horas == 0:
                 tiene_alerta = True
@@ -310,6 +453,8 @@ def liquidacion_nomina(request):
     # Reemplazar rows planos por rows procesados
     context['rows'] = rows_processed
     context['stats'] = stats
+    context['novedades_nomina'] = novedades_nomina
+    context['novedades_facturacion'] = novedades_facturacion
     return render(request, 'tecnicos/liquidacion_nomina.html', context)
 
 @login_required

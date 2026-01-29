@@ -110,6 +110,58 @@
         </div>
     </div>
 
+    <!-- Novedades de hojas relacionadas -->
+    <div class="stats-grid stats-grid--novedades">
+        <div class="stat-card stat-card--warning">
+            <div class="stat-card__header">
+                <span class="stat-card__icon">📝</span>
+                Novedades Nómina Cali
+            </div>
+            <div class="stat-card__value">{{ novedades_nomina.cantidad }}</div>
+            <div class="stat-card__desc">
+                {% if novedades_nomina.fechas %}
+                    {{ novedades_nomina.fechas|length }} día{{ novedades_nomina.fechas|length|pluralize:"s" }} con novedad
+                {% else %}
+                    Sin novedades registradas
+                {% endif %}
+            </div>
+            {% if novedades_nomina.fechas %}
+            <div class="stat-card__dates">
+                {% for fecha in novedades_nomina.fechas|slice:":5" %}
+                    <span class="date-chip">{{ fecha }}</span>
+                {% endfor %}
+                {% if novedades_nomina.fechas|length > 5 %}
+                    <span class="date-chip date-chip--more">+{{ novedades_nomina.fechas|length|add:"-5" }} más</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        <div class="stat-card stat-card--warning">
+            <div class="stat-card__header">
+                <span class="stat-card__icon">📋</span>
+                Novedades Facturación
+            </div>
+            <div class="stat-card__value">{{ novedades_facturacion.cantidad }}</div>
+            <div class="stat-card__desc">
+                {% if novedades_facturacion.fechas %}
+                    {{ novedades_facturacion.fechas|length }} día{{ novedades_facturacion.fechas|length|pluralize:"s" }} con novedad
+                {% else %}
+                    Sin novedades registradas
+                {% endif %}
+            </div>
+            {% if novedades_facturacion.fechas %}
+            <div class="stat-card__dates">
+                {% for fecha in novedades_facturacion.fechas|slice:":5" %}
+                    <span class="date-chip">{{ fecha }}</span>
+                {% endfor %}
+                {% if novedades_facturacion.fechas|length > 5 %}
+                    <span class="date-chip date-chip--more">+{{ novedades_facturacion.fechas|length|add:"-5" }} más</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="card">
         <h2 class="card__title">
             <span class="card__title-icon">📊</span>

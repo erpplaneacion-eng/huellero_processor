@@ -416,6 +416,38 @@
     color: #856404;
 }
 
+/* Sección de novedades */
+.stats-grid--novedades {
+    margin-top: 0.5rem;
+}
+
+.stat-card__dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #eee;
+}
+
+.date-chip {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #856404;
+}
+
+.date-chip--more {
+    background: #e9ecef;
+    border-color: #ced4da;
+    color: #6c757d;
+    font-style: italic;
+}
+
 /* Filas con alerta */
 .row-alert {
     background-color: #fff3cd !important;
