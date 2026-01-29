@@ -38,6 +38,12 @@ class PerfilUsuario(models.Model):
 
     def get_area_url(self):
         """Retorna la URL del área asignada"""
-        if self.area == 'admin':
-            return '/admin/'
-        return f'/{self.area}/'
+        # Mapeo de áreas a URLs
+        AREA_URL_MAP = {
+            'admin': '/admin/',
+            'supervision': '/supervision/',
+            'logistica': '/logistica/',
+            'produccion': '/produccion/',
+            'mantenimiento': '/mantenimiento/',
+        }
+        return AREA_URL_MAP.get(self.area, '/logistica/')

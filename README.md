@@ -134,11 +134,19 @@ El sistema genera logs detallados en `logs/`:
 - `casos_especiales_YYYYMMDD.xlsx` - Casos para revisión manual
 
 ## contraseñas usuarios logistica
-marcecast
+
 marce123
 ## administrador
 admin                                                                                                     
 Chvs2024* 
+## tecnico
+ Usuario: admin
+ Contraseña: admin123
+
+ norbello
+ norbe123
+
+
 
 ## 🛠️ Soporte
 

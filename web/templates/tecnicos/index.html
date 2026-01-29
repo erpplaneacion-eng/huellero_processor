@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Panel de Supervisión{% endblock %}
+
+{% block content %}
+<!-- Navegación de usuario -->
+<nav class="user-nav">
+    <div class="user-nav__info">
+        <span>👤</span>
+        <span class="user-nav__name">{{ user.get_full_name|default:user.username }}</span>
+        <span class="user-nav__area">(Supervisión)</span>
+    </div>
+    <div>
+        <a href="{% url 'users:logout' %}" class="user-nav__link">🚪 Cerrar Sesión</a>
+    </div>
+</nav>
+
+<header class="header">
+    <div class="header__icon">📋</div>
+    <h1 class="header__title">Panel de Supervisión</h1>
+    <p class="header__subtitle">Corporación Hacia un Valle Solidario</p>
+</header>
+
+<!-- Dashboard de opciones -->
+<section class="dashboard">
+    <div class="card">
+        <h2 class="card__title">
+            <span class="card__title-icon">📊</span>
+            Módulos Disponibles
+        </h2>
+
+        <div class="modules-grid">
+            <!-- Liquidación de Nómina -->
+            <a href="liquidacion-nomina/" class="module-card">
+                <div class="module-card__icon">💰</div>
+                <div class="module-card__content">
+                    <h3 class="module-card__title">Liquidación de Nómina</h3>
+                    <p class="module-card__desc">Visualiza la liquidación diaria de nómina por sede</p>
+                </div>
+                <div class="module-card__arrow">→</div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Información del día -->
+    <div class="card">
+        <h2 class="card__title">
+            <span class="card__title-icon">📅</span>
+            Información
+        </h2>
+        <div class="info-box">
+            <p><strong>Usuario:</strong> {{ user.get_full_name|default:user.username }}</p>
+            <p><strong>Área:</strong> Supervisión</p>
+        </div>
+    </div>
+</section>
+
+<style>
+    .dashboard {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .modules-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .module-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.25rem;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 1px solid #dee2e6;
+        border-radius: 12px;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.3s ease;
+    }
+
+    .module-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border-color: #2c5aa0;
+        background: linear-gradient(135deg, #e7f1ff 0%, #d0e3ff 100%);
+    }
+
+    .module-card__icon {
+        font-size: 2.5rem;
+        flex-shrink: 0;
+    }
+
+    .module-card__content {
+        flex: 1;
+    }
+
+    .module-card__title {
+        margin: 0 0 0.25rem 0;
+        font-size: 1.1rem;
+        color: #2c5aa0;
+    }
+
+    .module-card__desc {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .module-card__arrow {
+        font-size: 1.5rem;
+        color: #2c5aa0;
+        opacity: 0.5;
+        transition: all 0.3s ease;
+    }
+
+    .module-card:hover .module-card__arrow {
+        opacity: 1;
+        transform: translateX(4px);
+    }
+
+    .info-box {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+
+    .info-box p {
+        margin: 0.5rem 0;
+    }
+</style>
+{% endblock %}

@@ -1,12 +1,13 @@
 """
 Comando de Django para ejecutar la liquidación de nómina diaria
-Cruza nomina_cali con facturacion
-Uso: python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar]
+Cruza nomina_cali con facturacion y envía reporte por email
+Uso: python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email]
 """
 
 from django.core.management.base import BaseCommand
 from datetime import datetime
 from apps.tecnicos.liquidacion_nomina_service import LiquidacionNominaService
+from apps.tecnicos.email_service import EmailService
 
 
 class Command(BaseCommand):
@@ -22,6 +23,11 @@ class Command(BaseCommand):
             '--forzar',
             action='store_true',
             help='Forzar creación aunque ya existan registros para la fecha'
+        )
+        parser.add_argument(
+            '--sin-email',
+            action='store_true',
+            help='No enviar correo de notificación'
         )
 
     def handle(self, *args, **options):
@@ -44,12 +50,28 @@ class Command(BaseCommand):
                 return
 
         forzar = options['forzar']
+        sin_email = options['sin_email']
+
         if forzar:
             self.stdout.write(self.style.WARNING('Modo forzado activado'))
 
+        if sin_email:
+            self.stdout.write(self.style.WARNING('Notificación por email desactivada'))
+
+        registros_generados = []
+
         try:
-            # Ejecutar servicio
+            # Ejecutar servicio de liquidación
             service = LiquidacionNominaService()
+
+            # Primero generar registros para tenerlos disponibles para el email
+            if fecha is None:
+                from datetime import date
+                fecha = date.today()
+
+            registros_generados, msg = service.generar_liquidacion_dia(fecha)
+
+            # Ejecutar liquidación completa
             resultado = service.ejecutar_liquidacion_diaria(fecha=fecha, forzar=forzar)
 
             # Mostrar resultado
@@ -69,6 +91,38 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(
                     self.style.WARNING(f"⚠ {resultado['mensaje']}")
+                )
+
+            # Enviar correo si hay registros y no se desactivó
+            if not sin_email and registros_generados:
+                self.stdout.write('')
+                self.stdout.write(self.style.NOTICE('Enviando notificación por email...'))
+
+                try:
+                    email_service = EmailService()
+                    resultado_email = email_service.enviar_reporte_liquidacion(
+                        fecha=fecha,
+                        registros=registros_generados,
+                        resultado=resultado
+                    )
+
+                    if resultado_email['exito']:
+                        self.stdout.write(
+                            self.style.SUCCESS(f"✓ {resultado_email['mensaje']}")
+                        )
+                    else:
+                        self.stdout.write(
+                            self.style.ERROR(f"✗ {resultado_email['mensaje']}")
+                        )
+
+                except Exception as e:
+                    self.stdout.write(
+                        self.style.ERROR(f"✗ Error al enviar email: {str(e)}")
+                    )
+
+            elif not sin_email and not registros_generados:
+                self.stdout.write(
+                    self.style.WARNING('⚠ No se envió email (sin registros para reportar)')
                 )
 
         except Exception as e:
