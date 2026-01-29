@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from .google_sheets import GoogleSheetsService
 import logging
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +324,9 @@ def nomina_cali(request):
     def procesar_fila_cali(fila, headers_dict):
         fila_nueva = []
         def get_val(col):
-            idx = headers_dict.get(col, -1)
+            # Normalizar el nombre de columna para que coincida con headers_dict
+            col_norm = col.upper().replace(' ', '').replace('_', '').replace('.', '').strip()
+            idx = headers_dict.get(col_norm, -1)
             return fila[idx] if idx != -1 and len(fila) > idx else ''
 
         fila_nueva.extend([
@@ -349,8 +352,8 @@ def nomina_cali(request):
         return fila_nueva
 
     context = _obtener_datos_filtrados(
-        request, 
-        'nomina_cali', 
+        request,
+        'nomina_cali',
         {
             'supervisor': ['SUPERVISOR'],
             'fecha': ['FECHA'],
@@ -360,6 +363,36 @@ def nomina_cali(request):
         procesador_fila=procesar_fila_cali,
         headers_manuales=headers_salida
     )
+
+    # Calcular días reportados por supervisor
+    # Estructura de fila: [SUPERVISOR, DESC_PROY, TIPO, CEDULA, NOMBRE, FECHA, DIA, H_INI, H_FIN, TOT_HORAS, NOVEDAD]
+    rows = context.get('rows', [])
+    supervisores_dias = defaultdict(set)  # supervisor -> set de fechas únicas
+    supervisores_registros = defaultdict(int)  # supervisor -> total registros
+
+    for row in rows:
+        if len(row) > 5:
+            supervisor = row[0] or 'Sin Supervisor'
+            fecha = row[5]
+            if fecha:
+                supervisores_dias[supervisor].add(fecha)
+            supervisores_registros[supervisor] += 1
+
+    # Convertir a lista ordenada por cantidad de días (descendente)
+    stats_supervisores = []
+    for sup, fechas in supervisores_dias.items():
+        stats_supervisores.append({
+            'nombre': sup,
+            'dias': len(fechas),
+            'registros': supervisores_registros[sup]
+        })
+
+    stats_supervisores.sort(key=lambda x: (-x['dias'], x['nombre']))
+
+    context['stats_supervisores'] = stats_supervisores
+    context['total_supervisores'] = len(stats_supervisores)
+    context['total_registros'] = len(rows)
+
     return render(request, 'tecnicos/nomina_cali.html', context)
 
 @login_required

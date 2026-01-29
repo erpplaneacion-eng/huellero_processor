@@ -82,6 +82,19 @@
     </div>
     {% endif %}
 
+    <!-- Estadísticas por Supervisor -->
+    {% if stats_supervisores %}
+    <div class="supervisor-stats-row">
+        {% for sup in stats_supervisores %}
+        <div class="sup-chip">
+            <span class="sup-chip__name">{{ sup.nombre }}</span>
+            <span class="sup-chip__badge">{{ sup.dias }} días</span>
+            <span class="sup-chip__detail">{{ sup.registros }} reg.</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <div class="card">
         <h2 class="card__title">
             <span class="card__title-icon">📊</span>
