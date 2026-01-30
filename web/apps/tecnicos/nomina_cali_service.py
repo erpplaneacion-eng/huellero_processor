@@ -29,6 +29,7 @@ class NominaCaliService:
 
     # Encabezados de la hoja
     HEADERS = [
+        'ID',
         'SUPERVISOR',
         'user',
         'MODALIDAD',
@@ -107,7 +108,7 @@ class NominaCaliService:
                 cols=len(self.HEADERS)
             )
             # Agregar encabezados
-            hoja.update('A1:L1', [self.HEADERS])
+            hoja.update('A1:M1', [self.HEADERS])
             print(f"Hoja '{self.NOMBRE_HOJA}' creada con encabezados")
             return hoja
 
@@ -140,7 +141,12 @@ class NominaCaliService:
 
         # Generar registros
         registros = []
+        consecutivo = 1
         for manip in manipuladoras:
+            # Generar ID único
+            id_registro = f"NOM-{fecha.strftime('%Y%m%d')}-{consecutivo:04d}"
+            consecutivo += 1
+
             # Datos de la manipuladora
             nombre = manip.get('Nombre', '')
             cedula = manip.get('No. Documento', '')
@@ -163,6 +169,7 @@ class NominaCaliService:
                 hora_salida = horario_sede.get('hora_salida', '')
 
             registro = [
+                id_registro,                # ID
                 supervisor_nombre,          # SUPERVISOR
                 user,                       # user
                 self.MODALIDAD,             # MODALIDAD (constante)
@@ -205,7 +212,7 @@ class NominaCaliService:
         ultima_fila = len(datos_actuales) + 1
 
         # Insertar registros
-        rango = f"A{ultima_fila}:L{ultima_fila + len(registros) - 1}"
+        rango = f"A{ultima_fila}:M{ultima_fila + len(registros) - 1}"
         hoja.update(values=registros, range_name=rango)
 
         return len(registros)

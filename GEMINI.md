@@ -16,7 +16,7 @@ Located in the project root, this directory contains the business logic modules:
 -   **`DataCleaner`**: Removes duplicate biometric scans.
 -   **`StateInference`**: Infers whether a scan is an "Entry" or "Exit" based on context.
 -   **`ShiftBuilder`**: Groups scans into logical work shifts.
--   **`Calculator`**: Computes hours worked (regular, night shifts) and identifies anomalies.
+-   **`Calculator`**: Computes hours worked. **Feature**: Automatically splits night shifts crossing midnight into two records to respect calendar days in final reports.
 -   **`ExcelGenerator`**: Produces the final Excel reports and "Special Cases" logs.
 -   **`logger`**: Centralized logging utility.
 
@@ -24,6 +24,9 @@ Located in the project root, this directory contains the business logic modules:
 -   **CLI (`main.py`)**: Entry point for local execution. Direct invocation of `src` modules.
 -   **Web (`web/`)**: A Django project serving a UI.
     -   **`apps.logistica`**: Handles file uploads and calls `src` logic via `HuelleroProcessor`.
+    -   **`apps.tecnicos`**: Handles automated reports (Nómina Cali, Facturación) and AppSheet integrations.
+        -   Includes `webhooks.py` for external notifications.
+        -   Includes `cron.py` for scheduled automation.
     -   **`apps.users`**: Manages authentication.
 
 ## Directory Structure
@@ -32,15 +35,13 @@ Located in the project root, this directory contains the business logic modules:
 huellero_processor/
 ├── main.py               # CLI Entry point
 ├── config.py             # Global configuration (thresholds, shifts)
+├── init_sheets_headers.py # Utility to initialize Google Sheets headers
 ├── src/                  # Shared Core Logic
 ├── web/                  # Django Web Application
 │   ├── manage.py         # Django CLI
 │   ├── huellero_web/     # Project settings
-│   └── apps/             # Django Apps (logistica, users)
+│   └── apps/             # Django Apps (logistica, tecnicos, users)
 ├── data/                 # Data storage (Git-ignored content)
-│   ├── input/            # Raw .xls files
-│   ├── output/           # Processed .xlsx reports
-│   └── maestro/          # Employee master list (empleados.xlsx)
 ├── logs/                 # Processing logs
 └── railway.json          # Deployment configuration
 ```
@@ -59,71 +60,39 @@ huellero_processor/
     source venv/bin/activate  # Windows: venv\Scripts\activate
     ```
 3.  **Install Dependencies:**
-    The project has dependencies for the core logic and the web app.
     ```bash
     pip install -r requirements.txt       # Core dependencies
     pip install -r web/requirements.txt   # Web dependencies
     ```
-    *(Note: `web/requirements.txt` likely includes the root `requirements.txt` content or specific web packages).*
+
+### Google Sheets Sync
+Before running the web app automation, initialize the headers in your Google Spreadsheet:
+```bash
+python init_sheets_headers.py
+```
 
 ## Usage
 
-### 1. CLI Mode (Local)
-Run the processor directly from the terminal.
+### 1. Web Mode (Django)
+Run the web server for a UI-based experience and automation.
+```bash
+cd web
+python manage.py runserver
+```
+Access at: `http://127.0.0.1:8000/`
 
-*   **Basic Usage:**
-    Place raw files in `data/input/` and run:
-    ```bash
-    python main.py
-    ```
-*   **With Master File:**
-    Ensure `data/maestro/empleados.xlsx` exists and run:
-    ```bash
-    python main.py --con-maestro
-    ```
-*   **Interactive Mode:**
-    ```bash
-    python main.py --interactivo
-    ```
+### 2. AppSheet Integration
+The web app is ready to receive webhooks from AppSheet at:
+`/supervision/api/webhook/novedad-nomina/`
 
-### 2. Web Mode (Django)
-Run the web server for a UI-based experience.
-
-*   **Development Server:**
-    ```bash
-    cd web
-    python manage.py runserver
-    ```
-    Access at: `http://127.0.0.1:8000/`
-
-*   **User Management:**
-    Create an admin user to access the backend:
-    ```bash
-    cd web
-    python manage.py createsuperuser
-    ```
+Ensure `WEBHOOK_SECRET_TOKEN` is configured in your `.env` file.
 
 ## Configuration
-
-*   **Processing Rules:** Modified in `config.py` (root). Adjust time thresholds, shift boundaries, and Excel formatting here.
-*   **Web Settings:** Modified in `web/huellero_web/settings.py`. Handles database connections, security, and static files.
-    *   **Environment Variables:** Use a `.env` file in `web/` for secrets (see `web/.env.example`).
-
-## Deployment
-
-The application is configured for **Railway** deployment.
-
-*   **Configuration:** `railway.json` and `Procfile`.
-*   **Build System:** Nixpacks (defined in `railway.json`).
-*   **Start Command:**
-    ```bash
-    cd web && python manage.py migrate && python manage.py collectstatic --noinput && gunicorn huellero_web.wsgi --bind 0.0.0.0:$PORT
-    ```
-*   **Environment:** Expects `DJANGO_ENV=production` for production security settings.
+*   **Core Logic:** Modified in `config.py` (root).
+*   **Web Settings:** Modified in `web/huellero_web/settings.py`.
+*   **Daily Tasks:** Automated via Cron endpoints in the `tecnicos` app.
 
 ## Development Workflow
-*   **Logic Changes:** modifying `src/` affects BOTH the CLI and Web app immediately.
-*   **Web Changes:** UI/UX changes are made in `web/templates` and `web/static`.
-*   **Testing:**
-    *   Run CLI manually with sample data in `data/input`.
-    *   Run Web app locally and upload sample data.
+*   **Logic Changes:** modifying `src/` affects BOTH the CLI and Web app.
+*   **Refactoring:** The `tecnicos` app is modularized into `views.py` (UI), `webhooks.py` (API), and `cron.py` (Automation).
+*   **Data Integrity:** All automated records must include a unique `ID` column.
