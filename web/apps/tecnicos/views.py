@@ -45,6 +45,36 @@ def _safe_float(val):
         return 0.0
 
 
+def _parsear_fecha(fecha_str):
+    """
+    Parsea una fecha en formato DD/MM/YYYY o YYYY-MM-DD.
+    Retorna tupla (dia, mes, año) como strings, o (None, None, None) si falla.
+    El mes se retorna con cero leading (01, 02, etc.) para comparar con filtros.
+    """
+    if not fecha_str:
+        return None, None, None
+
+    fecha_str = str(fecha_str).strip()
+
+    try:
+        if '-' in fecha_str:
+            # Formato YYYY-MM-DD
+            partes = fecha_str.split('-')
+            if len(partes) >= 3:
+                año, mes, dia = partes[0], partes[1], partes[2]
+                return dia, mes, año
+        elif '/' in fecha_str:
+            # Formato DD/MM/YYYY
+            partes = fecha_str.split('/')
+            if len(partes) >= 3:
+                dia, mes, año = partes[0], partes[1], partes[2]
+                return dia, mes, año
+    except:
+        pass
+
+    return None, None, None
+
+
 def _parsear_horas_formato(val):
     """
     Convierte formato de horas HH:MM o H:MM a horas decimales.
@@ -451,84 +481,226 @@ def liquidacion_nomina(request):
 
 @login_required
 def nomina_cali(request):
-    """Vista para Nómina Cali con cálculo de horas"""
-    headers_salida = [
-        'SUPERVISOR', 'DESCRIPCION PROYECTO', 'TIPO TIEMPO LABORADO', 
-        'CEDULA', 'NOMBRE COLABORADOR', 'FECHA', 'DIA', 
-        'HORA INICIAL', 'HORA FINAL', 'total_horas', 'NOVEDAD'
-    ]
+    """Vista para Nómina Cali con calendario y novedades de ambas hojas"""
+    import calendar
+    from datetime import date
 
-    def procesar_fila_cali(fila, headers_dict):
-        fila_nueva = []
-        def get_val(col):
-            # Normalizar el nombre de columna para que coincida con headers_dict
-            col_norm = col.upper().replace(' ', '').replace('_', '').replace('.', '').strip()
-            idx = headers_dict.get(col_norm, -1)
-            return fila[idx] if idx != -1 and len(fila) > idx else ''
+    # Obtener filtros
+    filtro_mes = request.GET.get('mes', '')
+    filtro_supervisor = request.GET.get('supervisor', '')
+    filtro_sede = request.GET.get('sede', '')
+    dias_seleccionados = request.GET.getlist('dias')  # Múltiples días
 
-        fila_nueva.extend([
-            get_val('SUPERVISOR'), get_val('DESCRIPCION PROYECTO'), 
-            get_val('TIPO TIEMPO LABORADO'), get_val('CEDULA'), 
-            get_val('NOMBRE COLABORADOR'), get_val('FECHA'), get_val('DIA'),
-            get_val('HORA INICIAL'), get_val('HORA FINAL')
-        ])
+    # Si no hay mes seleccionado, usar el mes actual
+    if not filtro_mes:
+        filtro_mes = datetime.now().strftime('%m')
 
-        h_ini_str, h_fin_str = get_val('HORA INICIAL'), get_val('HORA FINAL')
-        try:
-            t1, t2 = _parsear_hora(h_ini_str), _parsear_hora(h_fin_str)
-            if t1 and t2:
-                diff = t2 - t1
-                if diff.total_seconds() < 0: diff += timedelta(days=1)
-                fila_nueva.append(f"{diff.total_seconds() / 3600:.2f}")
-            else:
-                fila_nueva.append('-')
-        except:
-            fila_nueva.append('Error')
+    año_actual = datetime.now().year
+    mes_num = int(filtro_mes)
 
-        fila_nueva.append(get_val('NOVEDAD'))
-        return fila_nueva
+    # Generar estructura del calendario
+    cal = calendar.Calendar(firstweekday=0)  # Lunes = 0
+    dias_mes = []
+    for semana in cal.monthdayscalendar(año_actual, mes_num):
+        dias_mes.append(semana)
 
-    context = _obtener_datos_filtrados(
-        request,
-        'nomina_cali',
-        {
-            'supervisor': ['SUPERVISOR'],
-            'fecha': ['FECHA'],
-            'sede': ['DESCRIPCION PROYECTO']
+    context = {
+        'titulo': 'Nómina Cali',
+        'filtros': {
+            'mes': filtro_mes,
+            'supervisor': filtro_supervisor,
+            'sede': filtro_sede,
+            'dias': dias_seleccionados
         },
-        'Nómina Cali',
-        procesador_fila=procesar_fila_cali,
-        headers_manuales=headers_salida
-    )
+        'meses': MESES,
+        'calendario': {
+            'mes': mes_num,
+            'mes_nombre': MESES[mes_num - 1][1],
+            'año': año_actual,
+            'semanas': dias_mes,
+            'dias_semana': ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do']
+        },
+        'novedades_nomina': [],
+        'novedades_cali': [],
+        'dias_con_novedades': set(),
+        'dias_con_facturacion': set(),
+        'error_message': None
+    }
 
-    # Calcular días reportados por supervisor
-    # Estructura de fila: [SUPERVISOR, DESC_PROY, TIPO, CEDULA, NOMBRE, FECHA, DIA, H_INI, H_FIN, TOT_HORAS, NOVEDAD]
-    rows = context.get('rows', [])
-    supervisores_dias = defaultdict(set)  # supervisor -> set de fechas únicas
-    supervisores_registros = defaultdict(int)  # supervisor -> total registros
+    try:
+        service = GoogleSheetsService()
+        libro = service.abrir_libro()
 
-    for row in rows:
-        if len(row) > 5:
-            supervisor = row[0] or 'Sin Supervisor'
-            fecha = row[5]
-            if fecha:
-                supervisores_dias[supervisor].add(fecha)
-            supervisores_registros[supervisor] += 1
+        # ========== 1. NOVEDADES DE NOMINA_CALI (NOVEDAD=SI) ==========
+        try:
+            hoja_nomina = service.obtener_hoja(libro, nombre_hoja='nomina_cali')
+            datos_nomina = service.leer_datos(hoja_nomina)
 
-    # Convertir a lista ordenada por cantidad de días (descendente)
-    stats_supervisores = []
-    for sup, fechas in supervisores_dias.items():
-        stats_supervisores.append({
-            'nombre': sup,
-            'dias': len(fechas),
-            'registros': supervisores_registros[sup]
-        })
+            if datos_nomina and len(datos_nomina) > 0:
+                headers = datos_nomina[0]
+                headers_dict = {}
+                for i, h in enumerate(headers):
+                    h_norm = str(h).upper().replace(' ', '').replace('_', '').replace('.', '').strip()
+                    headers_dict[h_norm] = i
 
-    stats_supervisores.sort(key=lambda x: (-x['dias'], x['nombre']))
+                # Índices de columnas
+                idx_fecha = headers_dict.get('FECHA', -1)
+                idx_novedad = headers_dict.get('NOVEDAD', -1)
+                idx_desc_proy = headers_dict.get('DESCRIPCIONPROYECTO', -1)
+                idx_tipo = headers_dict.get('TIPOTIEMPOLABORADO', -1)
+                idx_nombre = headers_dict.get('NOMBRECOLABORADOR', -1)
+                idx_h_ini = headers_dict.get('HORAINICIAL', -1)
+                idx_h_fin = headers_dict.get('HORAFINAL', -1)
+                idx_supervisor = headers_dict.get('SUPERVISOR', -1)
 
-    context['stats_supervisores'] = stats_supervisores
-    context['total_supervisores'] = len(stats_supervisores)
-    context['total_registros'] = len(rows)
+                for fila in datos_nomina[1:]:
+                    if len(fila) <= max(idx_fecha, idx_novedad):
+                        continue
+
+                    novedad_val = str(fila[idx_novedad] if idx_novedad != -1 else '').strip().upper()
+                    if novedad_val != 'SI':
+                        continue
+
+                    fecha_str = fila[idx_fecha] if idx_fecha != -1 else ''
+                    dia, mes, año = _parsear_fecha(fecha_str)
+
+                    # Filtrar por mes
+                    if not dia or not mes:
+                        continue
+                    if mes != filtro_mes:
+                        continue
+
+                    # Agregar día a novedades del calendario
+                    context['dias_con_novedades'].add(int(dia))
+
+                    # Filtrar por supervisor
+                    if filtro_supervisor:
+                        sup_val = str(fila[idx_supervisor] if idx_supervisor != -1 else '').upper()
+                        if filtro_supervisor.upper() not in sup_val:
+                            continue
+
+                    # Filtrar por sede
+                    if filtro_sede:
+                        sede_val = str(fila[idx_desc_proy] if idx_desc_proy != -1 else '').upper()
+                        if filtro_sede.upper() not in sede_val:
+                            continue
+
+                    # Filtrar por días seleccionados
+                    if dias_seleccionados:
+                        dia_normalizado = str(int(dia))  # "05" -> "5"
+                        if dia_normalizado not in dias_seleccionados:
+                            continue
+
+                    # Agregar novedad
+                    context['novedades_nomina'].append({
+                        'descripcion_proyecto': fila[idx_desc_proy] if idx_desc_proy != -1 else '',
+                        'tipo_tiempo': fila[idx_tipo] if idx_tipo != -1 else '',
+                        'nombre': fila[idx_nombre] if idx_nombre != -1 else '',
+                        'hora_inicial': fila[idx_h_ini] if idx_h_ini != -1 else '',
+                        'hora_final': fila[idx_h_fin] if idx_h_fin != -1 else '',
+                        'fecha': fecha_str
+                    })
+        except Exception as e:
+            logger.error(f"Error leyendo nomina_cali: {e}")
+
+        # ========== 2. NOVEDADES DE NOVEDADES_CALI ==========
+        try:
+            hoja_novedades = service.obtener_hoja(libro, nombre_hoja='novedades_cali')
+            datos_novedades = service.leer_datos(hoja_novedades)
+
+            if datos_novedades and len(datos_novedades) > 0:
+                headers = datos_novedades[0]
+                headers_dict = {}
+                for i, h in enumerate(headers):
+                    h_norm = str(h).upper().replace(' ', '').replace('_', '').replace('.', '').strip()
+                    headers_dict[h_norm] = i
+
+                idx_fecha = headers_dict.get('FECHA', -1)
+                idx_sede = headers_dict.get('SEDE', -1)
+                idx_nombre = headers_dict.get('NOMBRECOLABORADOR', -1)
+                idx_h_ini = headers_dict.get('HORAINICIAL', -1)
+                idx_h_fin = headers_dict.get('HORAFINAL', -1)
+                idx_total = headers_dict.get('TOTALHORAS', -1)
+                idx_supervisor = headers_dict.get('SUPERVISOR', -1)
+
+                for fila in datos_novedades[1:]:
+                    if len(fila) <= idx_fecha:
+                        continue
+
+                    fecha_str = fila[idx_fecha] if idx_fecha != -1 else ''
+                    dia, mes, año = _parsear_fecha(fecha_str)
+
+                    # Filtrar por mes
+                    if not dia or not mes:
+                        continue
+                    if mes != filtro_mes:
+                        continue
+
+                    # Agregar día a novedades del calendario
+                    context['dias_con_novedades'].add(int(dia))
+
+                    # Filtrar por supervisor
+                    if filtro_supervisor:
+                        sup_val = str(fila[idx_supervisor] if idx_supervisor != -1 else '').upper()
+                        if filtro_supervisor.upper() not in sup_val:
+                            continue
+
+                    # Filtrar por sede
+                    if filtro_sede:
+                        sede_val = str(fila[idx_sede] if idx_sede != -1 else '').upper()
+                        if filtro_sede.upper() not in sede_val:
+                            continue
+
+                    # Filtrar por días seleccionados
+                    if dias_seleccionados:
+                        dia_normalizado = str(int(dia))  # "05" -> "5"
+                        if dia_normalizado not in dias_seleccionados:
+                            continue
+
+                    context['novedades_cali'].append({
+                        'sede': fila[idx_sede] if idx_sede != -1 else '',
+                        'nombre': fila[idx_nombre] if idx_nombre != -1 else '',
+                        'hora_inicial': fila[idx_h_ini] if idx_h_ini != -1 else '',
+                        'hora_final': fila[idx_h_fin] if idx_h_fin != -1 else '',
+                        'total_horas': fila[idx_total] if idx_total != -1 else '',
+                        'fecha': fecha_str
+                    })
+        except Exception as e:
+            logger.error(f"Error leyendo novedades_cali: {e}")
+
+        # ========== 3. DÍAS CON FACTURACIÓN ==========
+        try:
+            hoja_fact = service.obtener_hoja(libro, nombre_hoja='facturacion')
+            datos_fact = service.leer_datos(hoja_fact)
+
+            if datos_fact and len(datos_fact) > 0:
+                headers = datos_fact[0]
+                headers_dict = {}
+                for i, h in enumerate(headers):
+                    h_norm = str(h).upper().replace(' ', '').replace('_', '').replace('.', '').strip()
+                    headers_dict[h_norm] = i
+
+                idx_fecha = headers_dict.get('FECHA', -1)
+
+                for fila in datos_fact[1:]:
+                    if len(fila) <= idx_fecha or idx_fecha == -1:
+                        continue
+
+                    fecha_str = fila[idx_fecha]
+                    dia, mes, año = _parsear_fecha(fecha_str)
+
+                    if dia and mes and mes == filtro_mes:
+                        context['dias_con_facturacion'].add(int(dia))
+        except Exception as e:
+            logger.error(f"Error leyendo facturacion: {e}")
+
+        # Convertir sets a listas para el template
+        context['dias_con_novedades'] = list(context['dias_con_novedades'])
+        context['dias_con_facturacion'] = list(context['dias_con_facturacion'])
+
+    except Exception as e:
+        logger.error(f"Error en nomina_cali: {e}")
+        context['error_message'] = f"Error al conectar con Google Sheets: {str(e)}"
 
     return render(request, 'tecnicos/nomina_cali.html', context)
 

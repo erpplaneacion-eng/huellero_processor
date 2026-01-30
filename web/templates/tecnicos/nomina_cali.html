@@ -32,23 +32,10 @@
 <section class="content-section">
     <!-- Filtros -->
     <div class="filters-card">
-        <form method="get" class="filters-form">
-            <div class="form-group">
-                <label for="supervisor" class="form-label">Supervisor</label>
-                <input type="text" name="supervisor" id="supervisor" class="form-input" 
-                       placeholder="Buscar por supervisor..." value="{{ filtros.supervisor }}">
-            </div>
-
-            <div class="form-group">
-                <label for="sede" class="form-label">Descripción Proyecto (Sede)</label>
-                <input type="text" name="sede" id="sede" class="form-input" 
-                       placeholder="Buscar por descripción..." value="{{ filtros.sede }}">
-            </div>
-
+        <form method="get" class="filters-compact" id="filtrosForm">
             <div class="form-group">
                 <label for="mes" class="form-label">Mes</label>
-                <select name="mes" id="mes" class="form-select">
-                    <option value="">Todos los meses</option>
+                <select name="mes" id="mes" class="form-select" onchange="this.form.submit()">
                     {% for m_val, m_nom in meses %}
                         <option value="{{ m_val }}" {% if filtros.mes == m_val %}selected{% endif %}>
                             {{ m_nom }}
@@ -57,22 +44,34 @@
                 </select>
             </div>
 
+            <div class="form-group">
+                <label for="supervisor" class="form-label">Supervisor</label>
+                <input type="text" name="supervisor" id="supervisor" class="form-input"
+                       placeholder="Buscar..." value="{{ filtros.supervisor }}">
+            </div>
+
+            <div class="form-group">
+                <label for="sede" class="form-label">Sede</label>
+                <input type="text" name="sede" id="sede" class="form-input"
+                       placeholder="Buscar..." value="{{ filtros.sede }}">
+            </div>
+
+            <!-- Días seleccionados (ocultos, manejados por JS) -->
+            <div id="diasSeleccionadosContainer">
+                {% for dia in filtros.dias %}
+                    <input type="hidden" name="dias" value="{{ dia }}">
+                {% endfor %}
+            </div>
+
             <div class="filter-actions">
                 <button type="submit" class="btn btn--filter">
                     🔍 Filtrar
                 </button>
-                <a href="?" class="btn btn--clear">
+                <a href="?mes={{ filtros.mes }}" class="btn btn--clear">
                     Limpiar
                 </a>
             </div>
         </form>
-    </div>
-
-    <!-- Barra de acciones -->
-    <div class="actions-bar">
-        <a href="?" class="btn btn--secondary">
-            🔄 Actualizar Datos
-        </a>
     </div>
 
     {% if error_message %}
@@ -82,57 +81,131 @@
     </div>
     {% endif %}
 
-    <!-- Estadísticas por Supervisor -->
-    {% if stats_supervisores %}
-    <div class="supervisor-stats-row">
-        {% for sup in stats_supervisores %}
-        <div class="sup-chip">
-            <span class="sup-chip__name">{{ sup.nombre }}</span>
-            <span class="sup-chip__badge">{{ sup.dias }} días</span>
-            <span class="sup-chip__detail">{{ sup.registros }} reg.</span>
+    <!-- Grid de 3 columnas -->
+    <div class="nomina-grid">
+        <!-- Columna Izquierda: Novedades nomina_cali -->
+        <div class="novedades-column">
+            <div class="novedades-column__header">
+                <span>📋</span>
+                <h3 class="novedades-column__title">Novedades Nómina</h3>
+                <span class="novedades-column__count">{{ novedades_nomina|length }}</span>
+            </div>
+
+            {% if novedades_nomina %}
+                {% for nov in novedades_nomina %}
+                <div class="novedad-card">
+                    <div class="novedad-card__nombre">{{ nov.nombre }}</div>
+                    <div class="novedad-card__sede">📍 {{ nov.descripcion_proyecto }}</div>
+                    <div class="novedad-card__detalle">
+                        <span class="novedad-card__badge">{{ nov.tipo_tiempo }}</span>
+                        <span class="novedad-card__badge">🕐 {{ nov.hora_inicial }} - {{ nov.hora_final }}</span>
+                        <span class="novedad-card__fecha">📅 {{ nov.fecha }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="novedades-empty">
+                    <div class="novedades-empty__icon">📭</div>
+                    <div class="novedades-empty__text">No hay novedades para este período</div>
+                </div>
+            {% endif %}
         </div>
-        {% endfor %}
-    </div>
-    {% endif %}
 
-    <div class="card">
-        <h2 class="card__title">
-            <span class="card__title-icon">📊</span>
-            Detalle de Nómina Cali
-        </h2>
+        <!-- Columna Central: Calendario -->
+        <div class="calendario-column">
+            <div class="calendario-header">
+                <span class="calendario-header__mes">{{ calendario.mes_nombre }} {{ calendario.año }}</span>
+            </div>
 
-        <div class="table-container">
-            <table class="data-table">
+            <table class="calendario-table">
                 <thead>
                     <tr>
-                        {% for header in headers %}
-                            <th>{{ header }}</th>
-                        {% empty %}
-                            <th>Sin datos</th>
+                        {% for dia_sem in calendario.dias_semana %}
+                            <th>{{ dia_sem }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for row in rows %}
-                        <tr>
-                            {% for cell in row %}
-                                <td>{{ cell }}</td>
-                            {% endfor %}
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="{{ headers|length|default:'1' }}" class="text-center">
-                                No se encontraron registros que coincidan con los filtros.
-                            </td>
-                        </tr>
+                    {% for semana in calendario.semanas %}
+                    <tr>
+                        {% for dia in semana %}
+                        <td>
+                            {% if dia == 0 %}
+                                <div class="calendario-dia calendario-dia--vacio"></div>
+                            {% else %}
+                                <div class="calendario-dia
+                                    {% if dia in dias_con_novedades %}calendario-dia--novedad{% endif %}
+                                    {% if dia|stringformat:'s' in filtros.dias %}calendario-dia--seleccionado{% endif %}"
+                                    data-dia="{{ dia }}"
+                                    onclick="toggleDia({{ dia }})">
+                                    {{ dia }}
+                                    {% if dia in dias_con_facturacion %}
+                                        <span class="calendario-dia__facturacion">🍽️</span>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
+
+            <div class="calendario-leyenda">
+                <div class="calendario-leyenda__item">
+                    <span class="leyenda-color leyenda-color--novedad"></span>
+                    <span>Con novedades ({{ dias_con_novedades|length }})</span>
+                </div>
+                <div class="calendario-leyenda__item">
+                    <span class="leyenda-color leyenda-color--seleccionado"></span>
+                    <span>Seleccionado</span>
+                </div>
+                <div class="calendario-leyenda__item">
+                    <span>🍽️</span>
+                    <span>Facturado ({{ dias_con_facturacion|length }})</span>
+                </div>
+            </div>
+
+            <div class="calendario-acciones">
+                <button type="button" class="btn btn--ver-todos" onclick="verTodos()">
+                    👁️ Ver Todos
+                </button>
+            </div>
         </div>
 
-        <div class="table-info">
-            <span>Registros visualizados: <strong>{{ rows|length }}</strong></span>
+        <!-- Columna Derecha: Novedades novedades_cali -->
+        <div class="novedades-column">
+            <div class="novedades-column__header">
+                <span>📝</span>
+                <h3 class="novedades-column__title">Novedades Cali</h3>
+                <span class="novedades-column__count">{{ novedades_cali|length }}</span>
+            </div>
+
+            {% if novedades_cali %}
+                {% for nov in novedades_cali %}
+                <div class="novedad-card">
+                    <div class="novedad-card__nombre">{{ nov.nombre }}</div>
+                    <div class="novedad-card__sede">📍 {{ nov.sede }}</div>
+                    <div class="novedad-card__detalle">
+                        <span class="novedad-card__badge">🕐 {{ nov.hora_inicial }} - {{ nov.hora_final }}</span>
+                        {% if nov.total_horas %}
+                            <span class="novedad-card__horas">⏱️ {{ nov.total_horas }}h</span>
+                        {% endif %}
+                        <span class="novedad-card__fecha">📅 {{ nov.fecha }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="novedades-empty">
+                    <div class="novedades-empty__icon">📭</div>
+                    <div class="novedades-empty__text">No hay novedades para este período</div>
+                </div>
+            {% endif %}
         </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/nomina_cali.js' %}"></script>
 {% endblock %}
