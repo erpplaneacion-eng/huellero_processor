@@ -73,13 +73,13 @@ python manage.py test
 python manage.py test apps.tecnicos.tests
 
 # Run a single test class
-python manage.py test apps.tecnicos.tests.TestParsearHorasFormato
+python manage.py test apps.tecnicos.tests.ParsearHorasFormatoTest
 
 # Run a single test method
-python manage.py test apps.tecnicos.tests.TestParsearHorasFormato.test_formato_horas_minutos
+python manage.py test apps.tecnicos.tests.ParsearHorasFormatoTest.test_formato_hhmm_simple
 ```
 
-Tests cover: `_parsear_horas_formato()`, `_safe_float()`, `_parsear_hora()`, and liquidación metrics calculations.
+Test classes: `ParsearHorasFormatoTest`, `SafeFloatTest`, `ParsearHoraTest`, `CalculoMetricasLiquidacionTest`.
 
 ## Architecture
 
@@ -181,41 +181,11 @@ Uses `_obtener_datos_filtrados()` helper function for common filtering logic:
 - `_parsear_horas_formato()`: Converts "HH:MM" to decimal (e.g., "5:30" → 5.5)
 - `_parsear_hora()`: Parses time strings to datetime objects
 
-### Templates Structure (`web/templates/`)
+### Templates and Static Files
 
-```
-templates/
-├── base.html                    # Base template with container and footer
-├── users/
-│   └── login.html              # Login form
-├── logistica/
-│   └── index.html              # File upload interface
-└── tecnicos/
-    ├── index.html              # Supervisión dashboard
-    ├── liquidacion_nomina.html # Liquidación view with stats
-    ├── nomina_cali.html        # Nómina Cali view
-    └── facturacion.html        # Facturación view
-```
-
-### Static Files (`web/static/`)
-
-```
-static/
-├── css/
-│   ├── styles.css       # Global styles (logística, login)
-│   └── supervision.css  # Supervisión module styles
-└── js/
-    └── app.js           # Logística file upload logic
-```
-
-**Important:** Keep CSS/JS separate from HTML templates. Use `{% static 'css/...' %}` in templates.
-
-**Key CSS classes in `supervision.css`:**
-- `.stats-grid` / `.stat-card` — KPI cards with variants: `--info`, `--success`, `--danger`, `--warning`
-- `.supervisor-stats-row` / `.sup-chip` — Horizontal supervisor chips with badges
-- `.filters-card` / `.filters-form` — Filter section styling
-- `.data-table` / `.table-container` — Table with sticky headers and scroll
-- `.row-alert` — Highlighted rows for inconsistencies
+- Templates: `web/templates/{users,logistica,tecnicos}/` — Keep CSS/JS separate, use `{% static %}` tags
+- Static: `web/static/css/` (styles.css for logística, supervision.css for supervisión), `web/static/js/app.js`
+- Key CSS patterns in supervision.css: `.stat-card--{info,success,danger,warning}`, `.sup-chip`, `.row-alert`
 
 ### Configuration (`config.py`)
 
@@ -264,3 +234,7 @@ EMAIL_COORDINADOR=<recipient-email>
 ## Known Issues / Pending
 
 - **Multiple schedules per sede:** Need to clarify with stakeholders how to handle sedes with multiple shifts in HORARIOS sheet before implementing proper multi-schedule support.
+
+## Recent Changes
+
+- Webhook integration added for external notifications (see git log for details)

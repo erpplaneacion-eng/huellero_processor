@@ -638,13 +638,30 @@ def webhook_novedad_nomina(request):
             headers = [
                 'FECHA_REGISTRO', 'SUPERVISOR', 'SEDE', 'CEDULA',
                 'NOMBRE_COLABORADOR', 'FECHA', 'DIA', 'HORA_INICIAL',
-                'HORA_FINAL', 'OBSERVACION', 'ESTADO', 'PROCESADO_POR'
+                'HORA_FINAL', 'TOTAL_HORAS', 'OBSERVACION', 'ESTADO', 'PROCESADO_POR'
             ]
-            hoja_novedades.update('A1:L1', [headers])
+            hoja_novedades.update('A1:M1', [headers])
             logger.info(f"Hoja '{nombre_hoja}' creada exitosamente")
 
         # Preparar la fila a insertar
         fecha_registro = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+        # Calcular total de horas
+        h_ini_str = data.get('HORA_INICIAL', '')
+        h_fin_str = data.get('HORA_FINAL', '')
+        total_horas = ''
+        try:
+            t1 = _parsear_hora(h_ini_str)
+            t2 = _parsear_hora(h_fin_str)
+            if t1 and t2:
+                diff = t2 - t1
+                # Manejar turnos nocturnos (salida al día siguiente)
+                if diff.total_seconds() < 0:
+                    diff += timedelta(days=1)
+                total_horas = f"{diff.total_seconds() / 3600:.2f}"
+        except Exception:
+            total_horas = '-'
+
         nueva_fila = [
             fecha_registro,
             data.get('SUPERVISOR', ''),
@@ -655,6 +672,7 @@ def webhook_novedad_nomina(request):
             data.get('DIA', ''),
             data.get('HORA_INICIAL', ''),
             data.get('HORA_FINAL', ''),
+            total_horas,
             data.get('OBSERVACION', ''),
             'PENDIENTE',  # Estado inicial
             'AppSheet'    # Procesado por

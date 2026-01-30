@@ -11,6 +11,7 @@ The application is built with **Django** and serves as the frontend and API laye
 - **`huellero_web/`**: Main Django configuration (`settings.py`, `urls.py`, `wsgi.py`).
 - **`apps/`**: Django applications.
     - **`logistica/`**: Main business domain. Handles file uploads and invokes the processing logic.
+    - **`tecnicos/`**: Handles specialized technical reports and integrations (Google Sheets, Facturación, Nómina).
     - **`users/`**: User authentication and management (login/logout).
 - **`templates/`**: HTML templates (Django Template Language).
 - **`static/`**: Static assets (CSS, JS, images).
@@ -37,6 +38,20 @@ The project is configured to run in both local development and production (Railw
     - **Production**: PostgreSQL (via `DATABASE_URL`).
 - **Static Files**: Served via `WhiteNoise`.
 - **Allowed Hosts**: Configured to accept localhost and Railway domains.
+
+## Integrations
+
+### Google Sheets
+The `tecnicos` app integrates with Google Sheets to read and write report data.
+- **Service**: `apps.tecnicos.google_sheets.GoogleSheetsService`
+- **Authentication**: Uses Service Account credentials (via file in dev, JSON env var in prod).
+
+### AppSheet Webhooks
+The system exposes webhooks to receive real-time updates from AppSheet applications.
+- **Endpoint**: `/supervision/api/webhook/novedad-nomina/`
+- **Function**: Receives updates when a "Novedad" is marked as "SI" in AppSheet.
+- **Security**: Protected by a shared secret token (`WEBHOOK_SECRET_TOKEN`).
+- **Action**: Automatically creates/updates the `novedades_cali` sheet in the connected Google Spreadsheet.
 
 ## Setup & Usage
 
@@ -68,11 +83,14 @@ python manage.py createsuperuser
 
 ## Key Workflows
 1.  **Login**: Users authenticate via `apps.users`.
-2.  **Upload**: In the `logistica` app, users upload a raw "huellero" file.
+2.  **Upload (Logística)**: Users upload a raw "huellero" file.
 3.  **Process**:
     - The file is saved to `data/input` (in parent dir).
     - `HuelleroProcessor` (in `apps/logistica/processor.py`) orchestrates the cleaning, inference, and calculation steps using the `src` modules.
 4.  **Download**: The processed Excel file is generated in `data/output` and served to the user.
+5.  **Supervision/Tecnicos**:
+    - View reports from Google Sheets (Facturación, Nómina Cali).
+    - Receive webhooks from AppSheet for instant "Novedad" reporting.
 
 ## Deployment (Railway)
 The project is optimized for Railway.app.
