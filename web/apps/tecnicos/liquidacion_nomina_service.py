@@ -28,6 +28,7 @@ class LiquidacionNominaService:
 
     # Encabezados de la hoja (agrupado por sede)
     HEADERS = [
+        'ID',
         'SUPERVISOR',
         'SEDE',
         'FECHA',
@@ -136,7 +137,7 @@ class LiquidacionNominaService:
                 cols=len(self.HEADERS)
             )
             # Agregar encabezados
-            hoja.update('A1:N1', [self.HEADERS])
+            hoja.update('A1:O1', [self.HEADERS])
             print(f"Hoja '{self.NOMBRE_HOJA}' creada con encabezados")
             return hoja
 
@@ -197,6 +198,7 @@ class LiquidacionNominaService:
 
         # Generar registros agrupados
         registros = []
+        consecutivo = 1
         for sede_key, datos_sede in sedes_agrupadas.items():
             sede = datos_sede.get('sede_original', sede_key)
 
@@ -218,8 +220,13 @@ class LiquidacionNominaService:
             novedad = 'SI' if (novedad_nomina or novedad_fact) else ''
 
             total_horas = self.minutos_a_horas(datos_sede['total_minutos'])
+            
+            # Generar ID
+            id_registro = f"LIQ-{fecha.strftime('%Y%m%d')}-{consecutivo:04d}"
+            consecutivo += 1
 
             registro = [
+                id_registro,                        # ID
                 datos_sede['supervisor'],           # SUPERVISOR
                 sede,                               # SEDE
                 fecha_str,                          # FECHA
@@ -238,7 +245,7 @@ class LiquidacionNominaService:
             registros.append(registro)
 
         # Ordenar por supervisor y sede
-        registros.sort(key=lambda x: (x[0], x[1]))
+        registros.sort(key=lambda x: (x[1], x[2]))
 
         return registros, f"Generados {len(registros)} registros de liquidación (por sede) para {fecha_str}"
 
@@ -249,9 +256,9 @@ class LiquidacionNominaService:
 
         fecha_str = fecha.strftime('%Y-%m-%d')
 
-        # Buscar si hay registros con esta fecha (columna 3 = FECHA, índice 2)
+        # Buscar si hay registros con esta fecha (columna 4 = FECHA, índice 3)
         for fila in datos[1:]:  # Skip header
-            if len(fila) > 2 and fila[2] == fecha_str:
+            if len(fila) > 3 and fila[3] == fecha_str:
                 return True
         return False
 
@@ -267,7 +274,7 @@ class LiquidacionNominaService:
         ultima_fila = len(datos_actuales) + 1
 
         # Insertar registros
-        rango = f"A{ultima_fila}:N{ultima_fila + len(registros) - 1}"
+        rango = f"A{ultima_fila}:O{ultima_fila + len(registros) - 1}"
         hoja.update(values=registros, range_name=rango)
 
         return len(registros)

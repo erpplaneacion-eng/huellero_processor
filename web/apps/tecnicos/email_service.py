@@ -109,11 +109,11 @@ class EmailService:
         dia_semana = self.DIAS_SEMANA.get(fecha.weekday(), '')
         fecha_str = fecha.strftime('%d/%m/%Y')
 
-        # Estructura de registros:
-        # [SUPERVISOR, SEDE, FECHA, DIA, CANT_MANIP, TOTAL_HORAS,
+        # Estructura de registros (con ID en index 0):
+        # [ID, SUPERVISOR, SEDE, FECHA, DIA, CANT_MANIP, TOTAL_HORAS,
         #  HUBO_RACIONES, COMP_AMPM, COMP_PM, ALMUERZO, IND,
         #  TOTAL_RACIONES, OBSERVACION, NOVEDAD]
-        # Índices: 0=SUP, 1=SEDE, 4=CANT, 5=HORAS, 6=HUBO_RAC, 11=TOT_RAC, 12=OBS, 13=NOV
+        # Índices: 1=SUP, 2=SEDE, 5=CANT, 6=HORAS, 7=HUBO_RAC, 12=TOT_RAC, 13=OBS, 14=NOV
 
         # Agrupar por supervisor
         supervisores = defaultdict(list)
@@ -127,15 +127,15 @@ class EmailService:
         }
 
         for reg in registros:
-            supervisor = reg[0] if len(reg) > 0 else 'Sin Supervisor'
-            sede = reg[1] if len(reg) > 1 else ''
-            cant_manip = self._safe_int(reg[4]) if len(reg) > 4 else 0
-            total_horas = reg[5] if len(reg) > 5 else ''
+            supervisor = reg[1] if len(reg) > 1 else 'Sin Supervisor'
+            sede = reg[2] if len(reg) > 2 else ''
+            cant_manip = self._safe_int(reg[5]) if len(reg) > 5 else 0
+            total_horas = reg[6] if len(reg) > 6 else ''
             horas_decimal = self._parsear_horas(total_horas)
-            hubo_raciones = reg[6] if len(reg) > 6 else ''
-            total_raciones = self._safe_int(reg[11]) if len(reg) > 11 else 0
-            observacion = reg[12] if len(reg) > 12 else ''
-            novedad = reg[13] if len(reg) > 13 else ''
+            hubo_raciones = reg[7] if len(reg) > 7 else ''
+            total_raciones = self._safe_int(reg[12]) if len(reg) > 12 else 0
+            observacion = reg[13] if len(reg) > 13 else ''
+            novedad = reg[14] if len(reg) > 14 else ''
 
             # Determinar estado
             tiene_inconsistencia = False
