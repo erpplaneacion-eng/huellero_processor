@@ -34,6 +34,7 @@ def webhook_novedad_nomina(request):
             "ID": "NOM-YYYYMMDD-####",
             "SUPERVISOR": "...",
             "DESCRIPCION_PROYECTO": "...",
+            "TIPO_TIEMPO_LABORADO": "...",
             "CEDULA": "...",
             "NOMBRE_COLABORADOR": "...",
             "FECHA": "...",
@@ -41,6 +42,9 @@ def webhook_novedad_nomina(request):
             "HORA_INICIAL": "...",
             "HORA_FINAL": "...",
             "NOVEDAD": "SI",
+            "FECHA_FINAL": "...",
+            "DIA_FINAL": "...",
+            "OBSERVACIONES": "...",
             "OBSERVACION": "..."
         }
     }
@@ -90,14 +94,15 @@ def webhook_novedad_nomina(request):
             hoja_novedades = service.obtener_hoja(libro, nombre_hoja=nombre_hoja)
         except Exception:
             # La hoja no existe, crearla
-            hoja_novedades = libro.add_worksheet(title=nombre_hoja, rows=1000, cols=15)
+            hoja_novedades = libro.add_worksheet(title=nombre_hoja, rows=1000, cols=20)
             # Agregar headers
             headers = [
-                'ID', 'FECHA_REGISTRO', 'SUPERVISOR', 'SEDE', 'CEDULA',
-                'NOMBRE_COLABORADOR', 'FECHA', 'DIA', 'HORA_INICIAL',
-                'HORA_FINAL', 'TOTAL_HORAS', 'OBSERVACION', 'ESTADO', 'PROCESADO_POR'
+                'ID', 'FECHA_REGISTRO', 'SUPERVISOR', 'SEDE', 'TIPO TIEMPO LABORADO',
+                'CEDULA', 'NOMBRE_COLABORADOR', 'FECHA', 'DIA', 'HORA_INICIAL',
+                'HORA_FINAL', 'TOTAL_HORAS', 'FECHA FINAL', 'DIA FINAL',
+                'OBSERVACIONES', 'OBSERVACION', 'ESTADO', 'PROCESADO_POR'
             ]
-            hoja_novedades.update('A1:N1', [headers])
+            hoja_novedades.update(values=[headers], range_name='A1:R1')
             logger.info(f"Hoja '{nombre_hoja}' creada exitosamente")
 
         # Preparar la fila a insertar
@@ -124,6 +129,7 @@ def webhook_novedad_nomina(request):
             fecha_registro,
             data.get('SUPERVISOR', ''),
             data.get('DESCRIPCION_PROYECTO', data.get('SEDE', '')),
+            data.get('TIPO_TIEMPO_LABORADO', data.get('TIPO TIEMPO LABORADO', '')),
             data.get('CEDULA', ''),
             data.get('NOMBRE_COLABORADOR', ''),
             data.get('FECHA', ''),
@@ -131,6 +137,9 @@ def webhook_novedad_nomina(request):
             data.get('HORA_INICIAL', ''),
             data.get('HORA_FINAL', ''),
             total_horas,
+            data.get('FECHA_FINAL', data.get('FECHA FINAL', '')),  # FECHA FINAL
+            data.get('DIA_FINAL', data.get('DIA FINAL', '')),      # DIA FINAL
+            data.get('OBSERVACIONES', ''),                          # OBSERVACIONES
             data.get('OBSERVACION', ''),
             'PENDIENTE',  # Estado inicial
             'AppSheet'    # Procesado por

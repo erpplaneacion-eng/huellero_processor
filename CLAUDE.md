@@ -61,6 +61,28 @@ python manage.py nomina_cali_diaria [--fecha YYYY-MM-DD] [--forzar]
 python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email]
 ```
 
+### Cron HTTP Endpoints (for Railway/external schedulers)
+
+Token authentication via query param `?token=<WEBHOOK_SECRET_TOKEN>` or header `Authorization: Bearer <token>`.
+
+```bash
+# Facturacion diaria
+GET/POST /supervision/cron/facturacion/?token=<token>
+
+# Nomina Cali diaria
+GET/POST /supervision/cron/nomina-cali/?token=<token>
+
+# Liquidacion diaria (add ?sin_email=1 to skip email)
+GET/POST /supervision/cron/liquidacion/?token=<token>
+```
+
+### Google Sheets Initialization
+
+```bash
+# Initialize/sync Google Sheets headers (run once or after schema changes)
+python init_sheets_headers.py
+```
+
 ### Running Tests
 
 ```bash
@@ -138,6 +160,8 @@ Manages payroll data through Google Sheets integration.
   - KPI summary cards (Total Sedes, Manipuladoras, Con Horas, Con Raciones, Inconsistencias)
   - Breakdown by supervisor with per-sede details (Manipuladoras, Horas, Raciones, Estado)
   - Color-coded status badges (OK/green, Inconsistencia/red, Novedad/yellow)
+- **webhooks.py** — Handles AppSheet webhook for NOVEDAD notifications.
+- **cron.py** — HTTP endpoints for external schedulers (Railway cron jobs).
 
 #### Google Sheets Structure
 
@@ -152,11 +176,22 @@ The system reads/writes to a Google Sheets workbook with these sheets:
 | `facturacion` | Daily ration records per sede (generated at 8 AM) |
 | `nomina_cali` | Daily manipuladora records with hours (generated at 8 AM) |
 | `liquidacion_nomina` | Aggregated payroll by sede (generated at 10 PM) |
+| `novedades_cali` | Novedades received via webhook from AppSheet |
+
+**nomina_cali columns (16):**
+`ID, SUPERVISOR, user, MODALIDAD, DESCRIPCION PROYECTO, TIPO TIEMPO LABORADO, CEDULA, NOMBRE COLABORADOR, FECHA, DIA, HORA INICIAL, HORA FINAL, NOVEDAD, FECHA FINAL, DIA FINAL, OBSERVACIONES`
+
+**novedades_cali columns (18):**
+`ID, FECHA_REGISTRO, SUPERVISOR, SEDE, TIPO TIEMPO LABORADO, CEDULA, NOMBRE_COLABORADOR, FECHA, DIA, HORA_INICIAL, HORA_FINAL, TOTAL_HORAS, FECHA FINAL, DIA FINAL, OBSERVACIONES, OBSERVACION, ESTADO, PROCESADO_POR`
+
+#### Webhooks
+
+- **`/supervision/api/webhook/novedad-nomina/`** — Receives AppSheet notifications when NOVEDAD=SI. Creates records in `novedades_cali` sheet. Requires `WEBHOOK_SECRET_TOKEN` in payload.
 
 #### Daily Workflow
 
 1. **8:00 AM** — `facturacion_diaria` and `nomina_cali_diaria` create default records
-2. **During day** — Supervisors edit via AppSheet, mark NOVEDAD=SI for changes
+2. **During day** — Supervisors edit via AppSheet, mark NOVEDAD=SI for changes (triggers webhook)
 3. **10:00 PM** — `liquidacion_nomina_diaria` crosses data, generates liquidation, sends email
 
 #### Views (`views.py`)
@@ -211,6 +246,9 @@ SECRET_KEY=<secret-key>
 EMAIL_HOST_USER=<gmail-address>
 EMAIL_HOST_PASSWORD=<app-password-16-chars>
 EMAIL_COORDINADOR=<recipient-email>
+
+# Webhooks & Cron authentication
+WEBHOOK_SECRET_TOKEN=<secret-token>
 ```
 
 ### Data directories

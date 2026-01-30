@@ -137,7 +137,7 @@ class LiquidacionNominaService:
                 cols=len(self.HEADERS)
             )
             # Agregar encabezados
-            hoja.update('A1:O1', [self.HEADERS])
+            hoja.update(values=[self.HEADERS], range_name='A1:O1')
             print(f"Hoja '{self.NOMBRE_HOJA}' creada con encabezados")
             return hoja
 

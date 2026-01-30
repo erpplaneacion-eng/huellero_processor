@@ -164,7 +164,7 @@ class GoogleSheetsService:
             rango: Rango (ej: 'A1:C3')
             valores: Lista de listas con valores
         """
-        hoja.update(rango, valores)
+        hoja.update(values=valores, range_name=rango)
 
     def agregar_fila(self, hoja, valores):
         """
