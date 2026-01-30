@@ -518,6 +518,7 @@ def nomina_cali(request):
         'novedades_nomina': [],
         'novedades_cali': [],
         'dias_con_novedades': set(),
+        'dias_con_nomina': set(),
         'dias_con_facturacion': set(),
         'error_message': None
     }
@@ -551,18 +552,21 @@ def nomina_cali(request):
                 for fila in datos_nomina[1:]:
                     if len(fila) <= max(idx_fecha, idx_novedad):
                         continue
-
-                    novedad_val = str(fila[idx_novedad] if idx_novedad != -1 else '').strip().upper()
-                    if novedad_val != 'SI':
-                        continue
-
+                    
                     fecha_str = fila[idx_fecha] if idx_fecha != -1 else ''
                     dia, mes, año = _parsear_fecha(fecha_str)
 
-                    # Filtrar por mes
+                    # Filtrar por mes global (para marcar el calendario)
                     if not dia or not mes:
                         continue
                     if mes != filtro_mes:
+                        continue
+
+                    # Agregar día a conjunto de nómina (hay registro ese día)
+                    context['dias_con_nomina'].add(int(dia))
+
+                    novedad_val = str(fila[idx_novedad] if idx_novedad != -1 else '').strip().upper()
+                    if novedad_val != 'SI':
                         continue
 
                     # Agregar día a novedades del calendario
@@ -689,8 +693,17 @@ def nomina_cali(request):
         except Exception as e:
             logger.error(f"Error leyendo facturacion: {e}")
 
+        # Calcular conjuntos para la leyenda
+        dias_con_novedades = context['dias_con_novedades']
+        dias_con_nomina = context['dias_con_nomina']
+        
+        context['dias_mixtos'] = list(dias_con_nomina & dias_con_novedades)
+        context['dias_solo_nomina'] = list(dias_con_nomina - dias_con_novedades)
+        context['dias_solo_novedad'] = list(dias_con_novedades - dias_con_nomina)
+
         # Convertir sets a listas para el template
-        context['dias_con_novedades'] = list(context['dias_con_novedades'])
+        context['dias_con_novedades'] = list(dias_con_novedades)
+        context['dias_con_nomina'] = list(dias_con_nomina)
         context['dias_con_facturacion'] = list(context['dias_con_facturacion'])
 
     except Exception as e:

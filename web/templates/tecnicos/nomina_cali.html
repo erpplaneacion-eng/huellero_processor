@@ -87,7 +87,7 @@
         <div class="novedades-column">
             <div class="novedades-column__header">
                 <span>📋</span>
-                <h3 class="novedades-column__title">Novedades Nómina</h3>
+                <h3 class="novedades-column__title">Nómina al dia</h3>
                 <span class="novedades-column__count">{{ novedades_nomina|length }}</span>
             </div>
 
@@ -134,7 +134,13 @@
                                 <div class="calendario-dia calendario-dia--vacio"></div>
                             {% else %}
                                 <div class="calendario-dia
-                                    {% if dia in dias_con_novedades %}calendario-dia--novedad{% endif %}
+                                    {% if dia in dias_con_novedades and dia in dias_con_nomina %}
+                                        calendario-dia--mixto
+                                    {% elif dia in dias_con_nomina %}
+                                        calendario-dia--nomina
+                                    {% elif dia in dias_con_novedades %}
+                                        calendario-dia--novedad
+                                    {% endif %}
                                     {% if dia|stringformat:'s' in filtros.dias %}calendario-dia--seleccionado{% endif %}"
                                     data-dia="{{ dia }}"
                                     onclick="toggleDia({{ dia }})">
@@ -153,8 +159,16 @@
 
             <div class="calendario-leyenda">
                 <div class="calendario-leyenda__item">
+                    <span class="leyenda-color leyenda-color--nomina"></span>
+                    <span>Nómina OK ({{ dias_solo_nomina|length }})</span>
+                </div>
+                <div class="calendario-leyenda__item">
                     <span class="leyenda-color leyenda-color--novedad"></span>
-                    <span>Con novedades ({{ dias_con_novedades|length }})</span>
+                    <span>Solo Novedad ({{ dias_solo_novedad|length }})</span>
+                </div>
+                <div class="calendario-leyenda__item">
+                    <span class="leyenda-color leyenda-color--mixto"></span>
+                    <span>Nómina + Novedad ({{ dias_mixtos|length }})</span>
                 </div>
                 <div class="calendario-leyenda__item">
                     <span class="leyenda-color leyenda-color--seleccionado"></span>

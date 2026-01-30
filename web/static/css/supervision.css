@@ -687,6 +687,26 @@
     background: #ffe69c;
 }
 
+.calendario-dia--nomina {
+    background: #d4edda;
+    color: #155724;
+    font-weight: 500;
+}
+
+.calendario-dia--nomina:hover {
+    background: #c3e6cb;
+}
+
+.calendario-dia--mixto {
+    background: #cce5ff;
+    color: #004085;
+    font-weight: 600;
+}
+
+.calendario-dia--mixto:hover {
+    background: #b8daff;
+}
+
 .calendario-dia--seleccionado {
     background: #2c5aa0 !important;
     color: white !important;
@@ -733,6 +753,16 @@
 .leyenda-color--novedad {
     background: #fff3cd;
     border: 1px solid #ffc107;
+}
+
+.leyenda-color--nomina {
+    background: #d4edda;
+    border: 1px solid #28a745;
+}
+
+.leyenda-color--mixto {
+    background: #cce5ff;
+    border: 1px solid #007bff;
 }
 
 .leyenda-color--seleccionado {
