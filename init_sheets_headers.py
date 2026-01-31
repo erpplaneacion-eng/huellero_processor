@@ -42,17 +42,17 @@ def init_headers():
     nomina_headers = [
         'ID', 'SUPERVISOR', 'user', 'MODALIDAD', 'DESCRIPCION PROYECTO',
         'TIPO TIEMPO LABORADO', 'CEDULA', 'NOMBRE COLABORADOR', 'FECHA',
-        'DIA', 'HORA INICIAL', 'HORA FINAL', 'NOVEDAD', 'FECHA FINAL',
-        'DIA FINAL', 'OBSERVACIONES'
+        'DIA', 'HORA INICIAL', 'HORA FINAL', 'TOTAL_HORAS', 'NOVEDAD',
+        'FECHA FINAL', 'DIA FINAL', 'OBSERVACIONES'
     ]
     try:
         hoja_nomina = libro.worksheet('nomina_cali')
-        hoja_nomina.update(values=[nomina_headers], range_name='A1:P1')
-        print("✅ Headers de nomina_cali actualizados (16 columnas)")
+        hoja_nomina.update(values=[nomina_headers], range_name='A1:Q1')
+        print("✅ Headers de nomina_cali actualizados (17 columnas)")
     except gspread.WorksheetNotFound:
         print("Creando hoja nomina_cali...")
         hoja_nomina = libro.add_worksheet(title='nomina_cali', rows=1000, cols=20)
-        hoja_nomina.update(values=[nomina_headers], range_name='A1:P1')
+        hoja_nomina.update(values=[nomina_headers], range_name='A1:Q1')
         print("✅ Hoja nomina_cali creada con headers")
     except Exception as e:
         print(f"⚠️ Error en nomina_cali: {e}")

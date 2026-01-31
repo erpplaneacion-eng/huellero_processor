@@ -6,6 +6,7 @@ Corporación Hacia un Valle Solidario
 
 import os
 from datetime import datetime, date
+from collections import defaultdict
 from apps.tecnicos.google_sheets import GoogleSheetsService
 
 
@@ -27,7 +28,7 @@ class NominaCaliService:
     TIPO_TIEMPO_LABORADO = 'P. ALIMENTOS'
     NOMBRE_HOJA = 'nomina_cali'
 
-    # Encabezados de la hoja
+    # Encabezados de la hoja (17 columnas)
     HEADERS = [
         'ID',
         'SUPERVISOR',
@@ -41,6 +42,7 @@ class NominaCaliService:
         'DIA',
         'HORA INICIAL',
         'HORA FINAL',
+        'TOTAL_HORAS',
         'NOVEDAD',
         'FECHA FINAL',
         'DIA FINAL',
@@ -83,20 +85,31 @@ class NominaCaliService:
         return supervisores
 
     def obtener_horarios(self):
-        """Obtiene los horarios por sede"""
+        """
+        Obtiene los horarios por sede, soportando múltiples turnos.
+
+        Returns:
+            dict: {sede_upper: [{'turno': 'A', 'hora_entrada': '', 'hora_salida': ''}, ...]}
+        """
         hoja = self.sheets_service.obtener_hoja(self.libro, 'HORARIOS')
         datos = hoja.get_all_records()
 
-        # Crear diccionario por nombre de sede
-        horarios = {}
+        # Crear diccionario con LISTA de turnos por sede
+        horarios = defaultdict(list)
         for h in datos:
             sede = h.get('SEDE', '').strip()
             if sede:
-                horarios[sede.upper()] = {
+                horarios[sede.upper()].append({
+                    'turno': h.get('TURNOS', 'A'),
                     'hora_entrada': h.get('HORA ENTRADA', ''),
                     'hora_salida': h.get('HORA SALIDA', '')
-                }
-        return horarios
+                })
+
+        # Ordenar turnos por nombre (A, B, C...)
+        for sede in horarios:
+            horarios[sede].sort(key=lambda x: x['turno'])
+
+        return dict(horarios)
 
     def crear_hoja_si_no_existe(self):
         """Crea la hoja nomina_cali si no existe y agrega los encabezados"""
@@ -111,13 +124,74 @@ class NominaCaliService:
                 cols=len(self.HEADERS)
             )
             # Agregar encabezados
-            hoja.update(values=[self.HEADERS], range_name='A1:P1')
+            hoja.update(values=[self.HEADERS], range_name='A1:Q1')
             print(f"Hoja '{self.NOMBRE_HOJA}' creada con encabezados")
             return hoja
 
+    def _calcular_total_horas(self, hora_entrada, hora_salida):
+        """
+        Calcula el total de horas entre hora de entrada y salida.
+
+        Args:
+            hora_entrada: string en formato HH:MM o HH:MM:SS
+            hora_salida: string en formato HH:MM o HH:MM:SS
+
+        Returns:
+            string: total de horas en formato decimal (ej: "5.50") o vacío si no se puede calcular
+        """
+        try:
+            if not hora_entrada or not hora_salida:
+                return ''
+
+            def parse_hora_a_minutos(h):
+                h = str(h).strip()
+                if not h:
+                    return None
+                partes = h.split(':')
+                horas = int(partes[0])
+                minutos = int(partes[1]) if len(partes) > 1 else 0
+                return horas * 60 + minutos
+
+            inicio_min = parse_hora_a_minutos(hora_entrada)
+            fin_min = parse_hora_a_minutos(hora_salida)
+
+            if inicio_min is None or fin_min is None:
+                return ''
+
+            diff_min = fin_min - inicio_min
+            # Manejar turnos nocturnos (salida al día siguiente)
+            if diff_min < 0:
+                diff_min += 24 * 60
+
+            # Convertir a decimal
+            total_horas = diff_min / 60
+            return f"{total_horas:.2f}"
+
+        except Exception:
+            return ''
+
+    def _calcular_turno_rotativo(self, dia_semana_num, indice_manipuladora, cantidad_turnos):
+        """
+        Calcula qué turno corresponde a una manipuladora según el día y su índice.
+
+        Fórmula: turno_index = (día_semana + índice_manipuladora) % cantidad_turnos
+
+        Args:
+            dia_semana_num: número del día (0=Lunes, 5=Sábado)
+            indice_manipuladora: índice de la manipuladora dentro de su sede (0, 1, 2...)
+            cantidad_turnos: número de turnos disponibles para la sede
+
+        Returns:
+            int: índice del turno a asignar (0, 1, 2...)
+        """
+        return (dia_semana_num + indice_manipuladora) % cantidad_turnos
+
     def generar_registros_dia(self, fecha=None):
         """
-        Genera los registros de nómina para un día específico
+        Genera los registros de nómina para un día específico.
+
+        Para sedes con múltiples turnos y manipuladoras, rota los turnos
+        usando la fórmula: (día_semana + índice_manipuladora) % cantidad_turnos
 
         Args:
             fecha: date object, si es None usa fecha actual
@@ -142,54 +216,82 @@ class NominaCaliService:
         supervisores = self.obtener_supervisores()
         horarios = self.obtener_horarios()
 
+        # Agrupar manipuladoras por sede para asignar índices
+        manip_por_sede = defaultdict(list)
+        for manip in manipuladoras:
+            sede = manip.get('sede educativa', '').strip().upper()
+            manip_por_sede[sede].append(manip)
+
         # Generar registros
         registros = []
         consecutivo = 1
-        for manip in manipuladoras:
-            # Generar ID único
-            id_registro = f"NOM-{fecha.strftime('%Y%m%d')}-{consecutivo:04d}"
-            consecutivo += 1
 
-            # Datos de la manipuladora
-            nombre = manip.get('Nombre', '')
-            cedula = manip.get('No. Documento', '')
-            sede = manip.get('sede educativa', '')
-            supervisor_nombre = manip.get('SUPERVISOR', '')
+        for sede_upper, manips_sede in manip_por_sede.items():
+            # Obtener turnos de esta sede
+            turnos_sede = horarios.get(sede_upper, [])
 
-            # Buscar user del supervisor
-            sup_info = supervisores.get(supervisor_nombre.upper(), {})
-            user = sup_info.get('user', '')
+            for indice_manip, manip in enumerate(manips_sede):
+                # Generar ID único
+                id_registro = f"NOM-{fecha.strftime('%Y%m%d')}-{consecutivo:04d}"
+                consecutivo += 1
 
-            # Buscar horarios de la sede
-            horario_sede = horarios.get(sede.upper(), {})
+                # Datos de la manipuladora
+                nombre = manip.get('Nombre', '')
+                cedula = manip.get('No. Documento', '')
+                sede = manip.get('sede educativa', '')
+                supervisor_nombre = manip.get('SUPERVISOR', '')
 
-            # Sábados: horas vacías
-            if es_sabado:
-                hora_entrada = ''
-                hora_salida = ''
-            else:
-                hora_entrada = horario_sede.get('hora_entrada', '')
-                hora_salida = horario_sede.get('hora_salida', '')
+                # Buscar user del supervisor
+                sup_info = supervisores.get(supervisor_nombre.upper(), {})
+                user = sup_info.get('user', '')
 
-            registro = [
-                id_registro,                # ID
-                supervisor_nombre,          # SUPERVISOR
-                user,                       # user
-                self.MODALIDAD,             # MODALIDAD (constante)
-                sede,                       # DESCRIPCION PROYECTO
-                self.TIPO_TIEMPO_LABORADO,  # TIPO TIEMPO LABORADO (constante)
-                cedula,                     # CEDULA
-                nombre,                     # NOMBRE COLABORADOR
-                fecha_str,                  # FECHA
-                dia_semana,                 # DIA
-                hora_entrada,               # HORA INICIAL
-                hora_salida,                # HORA FINAL
-                '',                         # NOVEDAD (vacío por defecto)
-                '',                         # FECHA FINAL (vacío por defecto)
-                '',                         # DIA FINAL (vacío por defecto)
-                ''                          # OBSERVACIONES (vacío por defecto)
-            ]
-            registros.append(registro)
+                # Determinar horario según rotación de turnos
+                if es_sabado:
+                    # Sábados: horas vacías
+                    hora_entrada = ''
+                    hora_salida = ''
+                elif not turnos_sede:
+                    # Sede sin horario registrado
+                    hora_entrada = ''
+                    hora_salida = ''
+                elif len(turnos_sede) == 1:
+                    # Sede con un solo turno - asignar directamente
+                    hora_entrada = turnos_sede[0].get('hora_entrada', '')
+                    hora_salida = turnos_sede[0].get('hora_salida', '')
+                else:
+                    # Sede con múltiples turnos - calcular rotación
+                    turno_idx = self._calcular_turno_rotativo(
+                        dia_semana_num,
+                        indice_manip,
+                        len(turnos_sede)
+                    )
+                    turno_asignado = turnos_sede[turno_idx]
+                    hora_entrada = turno_asignado.get('hora_entrada', '')
+                    hora_salida = turno_asignado.get('hora_salida', '')
+
+                # Calcular total de horas
+                total_horas = self._calcular_total_horas(hora_entrada, hora_salida)
+
+                registro = [
+                    id_registro,                # ID
+                    supervisor_nombre,          # SUPERVISOR
+                    user,                       # user
+                    self.MODALIDAD,             # MODALIDAD (constante)
+                    sede,                       # DESCRIPCION PROYECTO
+                    self.TIPO_TIEMPO_LABORADO,  # TIPO TIEMPO LABORADO (constante)
+                    cedula,                     # CEDULA
+                    nombre,                     # NOMBRE COLABORADOR
+                    fecha_str,                  # FECHA
+                    dia_semana,                 # DIA
+                    hora_entrada,               # HORA INICIAL
+                    hora_salida,                # HORA FINAL
+                    total_horas,                # TOTAL_HORAS
+                    '',                         # NOVEDAD (vacío por defecto)
+                    fecha_str,                  # FECHA FINAL (igual a FECHA)
+                    dia_semana,                 # DIA FINAL (igual a DIA)
+                    ''                          # OBSERVACIONES (vacío por defecto)
+                ]
+                registros.append(registro)
 
         return registros, f"Generados {len(registros)} registros para {dia_semana} {fecha_str}"
 
@@ -200,9 +302,9 @@ class NominaCaliService:
 
         fecha_str = fecha.strftime('%Y-%m-%d')
 
-        # Buscar si hay registros con esta fecha (columna 8 = FECHA, índice 7)
+        # Buscar si hay registros con esta fecha (columna 9 = FECHA, índice 8)
         for fila in datos[1:]:  # Skip header
-            if len(fila) > 7 and fila[7] == fecha_str:
+            if len(fila) > 8 and fila[8] == fecha_str:
                 return True
         return False
 
@@ -218,7 +320,7 @@ class NominaCaliService:
         ultima_fila = len(datos_actuales) + 1
 
         # Insertar registros
-        rango = f"A{ultima_fila}:P{ultima_fila + len(registros) - 1}"
+        rango = f"A{ultima_fila}:Q{ultima_fila + len(registros) - 1}"
         hoja.update(values=registros, range_name=rango)
 
         return len(registros)

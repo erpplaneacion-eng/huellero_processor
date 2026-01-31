@@ -154,7 +154,7 @@ Manages payroll data through Google Sheets integration.
 
 - **google_sheets.py** — Connection service for Google Sheets API using gspread. Requires `credentials/nomina.json` service account file.
 - **facturacion_service.py** — Generates daily ration records per sede. Creates records in `facturacion` sheet.
-- **nomina_cali_service.py** — Generates daily records for manipuladoras with schedules from `HORARIOS` sheet.
+- **nomina_cali_service.py** — Generates daily records for manipuladoras with schedules from `HORARIOS` sheet. Supports multiple shifts per sede with automatic rotation.
 - **liquidacion_nomina_service.py** — Crosses `nomina_cali` + `facturacion` to generate payroll liquidation aggregated by sede.
 - **email_service.py** — Sends email notifications via Gmail SMTP. Reports include:
   - KPI summary cards (Total Sedes, Manipuladoras, Con Horas, Con Raciones, Inconsistencias)
@@ -171,15 +171,15 @@ The system reads/writes to a Google Sheets workbook with these sheets:
 |-------|---------|
 | `Sedes` | Master list of sedes with ration quotas |
 | `Manipuladoras` | Employee list with Estado (activo/inactivo), sede, supervisor |
-| `HORARIOS` | Work schedules per sede (some sedes have multiple shifts) |
+| `HORARIOS` | Work schedules per sede. Columns: INSTITUCION, SEDE, HORA ENTRADA, HORA SALIDA, TOTAL HORAS, TURNOS (A/B/C). 15 sedes have multiple shifts. |
 | `sedes_supevisor` | Supervisor-sede assignments with email |
 | `facturacion` | Daily ration records per sede (generated at 8 AM) |
 | `nomina_cali` | Daily manipuladora records with hours (generated at 8 AM) |
 | `liquidacion_nomina` | Aggregated payroll by sede (generated at 10 PM) |
 | `novedades_cali` | Novedades received via webhook from AppSheet |
 
-**nomina_cali columns (16):**
-`ID, SUPERVISOR, user, MODALIDAD, DESCRIPCION PROYECTO, TIPO TIEMPO LABORADO, CEDULA, NOMBRE COLABORADOR, FECHA, DIA, HORA INICIAL, HORA FINAL, NOVEDAD, FECHA FINAL, DIA FINAL, OBSERVACIONES`
+**nomina_cali columns (17):**
+`ID, SUPERVISOR, user, MODALIDAD, DESCRIPCION PROYECTO, TIPO TIEMPO LABORADO, CEDULA, NOMBRE COLABORADOR, FECHA, DIA, HORA INICIAL, HORA FINAL, TOTAL_HORAS, NOVEDAD, FECHA FINAL, DIA FINAL, OBSERVACIONES`
 
 **novedades_cali columns (18):**
 `ID, FECHA_REGISTRO, SUPERVISOR, SEDE, TIPO TIEMPO LABORADO, CEDULA, NOMBRE_COLABORADOR, FECHA, DIA, HORA_INICIAL, HORA_FINAL, TOTAL_HORAS, FECHA FINAL, DIA FINAL, OBSERVACIONES, OBSERVACION, ESTADO, PROCESADO_POR`
@@ -211,6 +211,22 @@ Uses `_obtener_datos_filtrados()` helper function for common filtering logic:
 - Calculates total hours from HORA INICIAL/HORA FINAL
 - Shows supervisor chips with days reported per supervisor
 - Handles nocturnal shifts (entry one day, exit next morning)
+
+**Shift Rotation (Multiple Turnos):**
+
+For sedes with multiple shifts and manipuladoras, the system rotates shifts using:
+```
+turno_index = (día_semana + índice_manipuladora) % cantidad_turnos
+```
+
+Example for sede with 2 shifts (A, B) and 3 manipuladoras:
+| Manipuladora | Lun | Mar | Mié | Jue | Vie |
+|--------------|-----|-----|-----|-----|-----|
+| [0] María    |  A  |  B  |  A  |  B  |  A  |
+| [1] Carmen   |  B  |  A  |  B  |  A  |  B  |
+| [2] Rosa     |  A  |  B  |  A  |  B  |  A  |
+
+5 sedes currently have both multiple shifts AND multiple manipuladoras.
 
 **Hour Parsing:**
 - `_parsear_horas_formato()`: Converts "HH:MM" to decimal (e.g., "5:30" → 5.5)
@@ -267,12 +283,9 @@ WEBHOOK_SECRET_TOKEN=<secret-token>
 - Nocturnal exit records (00:00–10:00) are paired with the previous day's entry and attributed to the entry date.
 - The shift dict structure includes `es_nocturno`, `completo`, `entrada_inferida`, `salida_inferida`, `salida_corregida`, `nocturno_prospectivo` boolean flags.
 - Dependencies: pandas, openpyxl, xlrd, XlsxWriter, python-dateutil, gspread, google-auth, whitenoise. Python 3.8+.
-- Some sedes in HORARIOS have multiple shifts (AM/PM). Currently `nomina_cali_service` takes only the first schedule found per sede. 15 sedes have multiple shifts, FENALCO ASTURIAS has 4.
-
-## Known Issues / Pending
-
-- **Multiple schedules per sede:** Need to clarify with stakeholders how to handle sedes with multiple shifts in HORARIOS sheet before implementing proper multi-schedule support.
+- 15 sedes in HORARIOS have multiple shifts (AM/PM). `nomina_cali_service` rotates shifts automatically per manipuladora and day.
 
 ## Recent Changes
 
+- **Shift rotation**: Implemented automatic shift rotation for sedes with multiple turnos. Uses formula `(day + manip_index) % num_shifts` to distribute shifts fairly.
 - Webhook integration added for external notifications (see git log for details)
