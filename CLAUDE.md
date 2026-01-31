@@ -245,6 +245,7 @@ All thresholds, time ranges, feature flags, directory paths, and format strings 
 - `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — hour ranges for time-based state inference
 - `HORA_INICIO_TURNO_NOCTURNO` (17.5 / 17:30) — nocturnal shift detection threshold
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
+- `HORAS_LIMITE_JORNADA` (9.8) — maximum hours per workday, triggers `EXCEDE_JORNADA` observation
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`
 
 ### Environment Variables (`web/.env`)
@@ -285,7 +286,3 @@ WEBHOOK_SECRET_TOKEN=<secret-token>
 - Dependencies: pandas, openpyxl, xlrd, XlsxWriter, python-dateutil, gspread, google-auth, whitenoise. Python 3.8+.
 - 15 sedes in HORARIOS have multiple shifts (AM/PM). `nomina_cali_service` rotates shifts automatically per manipuladora and day.
 
-## Recent Changes
-
-- **Shift rotation**: Implemented automatic shift rotation for sedes with multiple turnos. Uses formula `(day + manip_index) % num_shifts` to distribute shifts fairly.
-- Webhook integration added for external notifications (see git log for details)

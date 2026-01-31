@@ -856,3 +856,162 @@
         min-width: 100%;
     }
 }
+
+/* ==========================================================================
+   NÓMINA CALI - DETALLE INFERIOR (PANEL COLABORADOR)
+   ========================================================================== */
+
+.detalle-section {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #dee2e6;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.detalle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 1rem;
+}
+
+.detalle-info h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.25rem;
+    color: #2c5aa0;
+}
+
+.detalle-sede {
+    display: block;
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.detalle-cedula {
+    display: inline-block;
+    background: #e9ecef;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-family: monospace;
+    color: #495057;
+}
+
+.btn-close-detalle {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #adb5bd;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+}
+
+.btn-close-detalle:hover {
+    color: #dc3545;
+}
+
+.detalle-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.detalle-stats .stat-card {
+    padding: 1rem;
+    text-align: center;
+    border: 1px solid #e9ecef;
+    box-shadow: none;
+    background: #f8f9fa;
+}
+
+.detalle-stats .stat-value {
+    font-size: 1.75rem;
+    display: block;
+}
+
+.detalle-stats .stat-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Timeline Horizontal de días */
+.detalle-timeline {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+    scrollbar-width: thin;
+}
+
+.timeline-dia {
+    flex: 0 0 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.timeline-dia__fecha {
+    font-size: 0.7rem;
+    color: #adb5bd;
+}
+
+.timeline-dia__casilla {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: #adb5bd;
+    border: 1px solid transparent;
+    cursor: default;
+    transition: all 0.2s;
+}
+
+/* Estados visuales en timeline */
+.timeline-dia__casilla--trabajado {
+    background: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.timeline-dia__casilla--novedad {
+    background: #fff3cd;
+    border-color: #ffeeba;
+    color: #856404;
+}
+
+.timeline-dia__casilla--mixto {
+    background: #cce5ff;
+    border-color: #b8daff;
+    color: #004085;
+}
+
+.timeline-dia__casilla:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Tooltip simple */
+.timeline-dia__casilla[title] {
+    position: relative;
+    cursor: help;
+}

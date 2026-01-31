@@ -520,8 +520,13 @@ def nomina_cali(request):
         'dias_con_novedades': set(),
         'dias_con_nomina': set(),
         'dias_con_facturacion': set(),
-        'error_message': None
+        'error_message': None,
+        'asistencia_data': {}  # Valor por defecto dict vacío
     }
+
+    # Inicializar variables para evitar NameError
+    datos_nomina = None
+    datos_novedades = None
 
     try:
         service = GoogleSheetsService()
@@ -705,6 +710,129 @@ def nomina_cali(request):
         context['dias_con_novedades'] = list(dias_con_novedades)
         context['dias_con_nomina'] = list(dias_con_nomina)
         context['dias_con_facturacion'] = list(context['dias_con_facturacion'])
+
+        # ========== 4. PREPARAR DATOS DETALLADOS PARA EL FRONTEND ==========
+        # Diccionario maestro: { cedula_o_nombre: { nombre, sede, registros: [], resumen: {} } }
+        # Usaremos la cédula como clave preferida, o el nombre si no hay cédula
+        asistencia_map = defaultdict(lambda: {
+            'nombre': '', 
+            'sede': '', 
+            'cedula': '',
+            'registros': [],
+            'resumen': {'dias_trabajados': 0, 'total_horas': 0.0, 'dias_novedad': 0}
+        })
+
+        def _procesar_fuente_para_detalle(datos, headers_d, tipo_fuente):
+            """Helper para procesar cada hoja y agregarla al mapa maestro"""
+            if not datos or len(datos) < 2: return
+
+            # Detectar índices dinámicamente
+            idx_ced = headers_d.get('CEDULA', -1)
+            # En facturación a veces no hay cédula, usamos nombre como fallback clave
+            idx_nom = headers_d.get('NOMBRECOLABORADOR', -1)
+            if idx_nom == -1: idx_nom = headers_d.get('NOMBRE', -1) # Facturación suele tener NOMBRE
+
+            idx_sede = headers_d.get('DESCRIPCIONPROYECTO', -1)
+            if idx_sede == -1: idx_sede = headers_d.get('SEDE', -1)
+            if idx_sede == -1: idx_sede = headers_d.get('SEDE_EDUCATIVA', -1)
+
+            idx_fecha = headers_d.get('FECHA', -1)
+            
+            # Específicos
+            idx_horas = headers_d.get('TOTALHORAS', -1) # Nomina y Novedades
+            idx_novedad = headers_d.get('NOVEDAD', -1)
+            idx_tipo = headers_d.get('TIPOTIEMPOLABORADO', -1)
+
+            for fila in datos[1:]:
+                # Obtener clave única (Cédula o Nombre Limpio)
+                cedula = str(fila[idx_ced]).strip() if idx_ced != -1 and len(fila) > idx_ced else ''
+                nombre = str(fila[idx_nom]).strip() if idx_nom != -1 and len(fila) > idx_nom else ''
+                
+                if not cedula and not nombre: continue
+                
+                # Clave principal: Cédula. Si no hay, usar Nombre como "cédula temporal"
+                clave = cedula if cedula else nombre
+
+                # Validar fecha y mes
+                fecha_str = fila[idx_fecha] if idx_fecha != -1 and len(fila) > idx_fecha else ''
+                dia, mes, año = _parsear_fecha(fecha_str)
+                if not mes or mes != filtro_mes: continue
+
+                # Datos básicos
+                sede = str(fila[idx_sede]).strip() if idx_sede != -1 and len(fila) > idx_sede else ''
+                
+                # Datos numéricos
+                horas = 0.0
+                if idx_horas != -1 and len(fila) > idx_horas:
+                    h_val = str(fila[idx_horas])
+                    # Si viene con formato HH:MM (Nómina) o Decimal (Novedades)
+                    horas = _parsear_horas_formato(h_val)
+
+                # Novedad
+                novedad_val = 'NO'
+                tipo_val = ''
+                if tipo_fuente == 'nomina':
+                    if idx_novedad != -1 and len(fila) > idx_novedad:
+                        novedad_val = str(fila[idx_novedad]).strip().upper()
+                    if idx_tipo != -1 and len(fila) > idx_tipo:
+                        tipo_val = str(fila[idx_tipo]).strip()
+                elif tipo_fuente == 'novedades':
+                    novedad_val = 'SI' # Por definición es novedad
+                    if idx_tipo != -1 and len(fila) > idx_tipo:
+                        tipo_val = str(fila[idx_tipo]).strip()
+                    else:
+                        tipo_val = 'Novedad AppSheet' # Fallback
+                elif tipo_fuente == 'facturacion':
+                    # En facturación asumimos asistencia normal si no dice novedad
+                    pass
+
+                # Actualizar Mapa Maestro
+                obj = asistencia_map[clave]
+                if not obj['nombre'] and nombre: obj['nombre'] = nombre
+                if not obj['cedula'] and cedula: obj['cedula'] = cedula
+                if not obj['sede'] and sede: obj['sede'] = sede
+
+                # Evitar duplicados exactos de fecha si ya existen (prioridad Nomina > Novedades > Facturacion)
+                # Pero aquí simplemente agregamos todo y el frontend decide cómo mostrarlo
+                obj['registros'].append({
+                    'fuente': tipo_fuente,
+                    'fecha': fecha_str,
+                    'dia': int(dia),
+                    'horas': horas,
+                    'novedad': novedad_val,
+                    'tipo': tipo_val
+                })
+
+                # Actualizar resumen (solo sumar de Nómina para no duplicar stats)
+                if tipo_fuente == 'nomina':
+                    if novedad_val == 'SI':
+                        obj['resumen']['dias_novedad'] += 1
+                    elif horas > 0:
+                        obj['resumen']['dias_trabajados'] += 1
+                        obj['resumen']['total_horas'] += horas
+
+        # 1. Procesar Nómina
+        try:
+            if datos_nomina and len(datos_nomina) > 0:
+                # Recalcular headers dict localmente para esta función
+                h_dict = {str(h).upper().replace(' ', '').replace('_', '').replace('.', '').strip(): i for i, h in enumerate(datos_nomina[0])}
+                _procesar_fuente_para_detalle(datos_nomina, h_dict, 'nomina')
+        except Exception as e:
+            logger.error(f"Error procesando datos_nomina para detalle: {e}")
+
+        # 2. Procesar Novedades Cali
+        try:
+            if datos_novedades and len(datos_novedades) > 0:
+                h_dict = {str(h).upper().replace(' ', '').replace('_', '').replace('.', '').strip(): i for i, h in enumerate(datos_novedades[0])}
+                _procesar_fuente_para_detalle(datos_novedades, h_dict, 'novedades')
+        except Exception as e:
+            logger.error(f"Error procesando datos_novedades para detalle: {e}")
+
+        # Pasar dict al template (json_script lo serializa automáticamente)
+        context['asistencia_data'] = dict(asistencia_map)
+
+        # Debug: log cantidad de colaboradores en el mapa
+        logger.info(f"nomina_cali: asistencia_map tiene {len(asistencia_map)} colaboradores")
 
     except Exception as e:
         logger.error(f"Error en nomina_cali: {e}")
