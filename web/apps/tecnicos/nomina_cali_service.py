@@ -59,10 +59,11 @@ class NominaCaliService:
         hoja = self.sheets_service.obtener_hoja(self.libro, 'Manipuladoras')
         datos = hoja.get_all_records()
 
-        # Filtrar solo activas
+        # Filtrar solo activas y excluir incapacitadas
         manipuladoras_activas = [
             m for m in datos
             if m.get('Estado', '').strip().lower() == 'activo'
+            and m.get('Estado', '').strip().lower() != 'incapacitada'
             and m.get('Nombre')
             and m.get('No. Documento')
         ]
@@ -340,15 +341,32 @@ class NominaCaliService:
                         hora_entrada = turnos_sede[0].get('hora_entrada', '')
                         hora_salida = turnos_sede[0].get('hora_salida', '')
                     else:
-                        # Sede con múltiples turnos - calcular rotación
-                        turno_idx = self._calcular_turno_rotativo(
-                            dia_semana_num,
-                            indice_manip,
-                            len(turnos_sede)
-                        )
-                        turno_asignado = turnos_sede[turno_idx]
-                        hora_entrada = turno_asignado.get('hora_entrada', '')
-                        hora_salida = turno_asignado.get('hora_salida', '')
+                        # Sede con múltiples turnos
+                        # 1. Verificar si tiene TURNO FIJO asignado en hoja Manipuladoras
+                        turno_fijo = str(manip.get('TURNOS', '')).strip().upper()
+                        turno_encontrado = None
+
+                        if turno_fijo:
+                            # Buscar si el turno fijo existe en los horarios de la sede
+                            for t in turnos_sede:
+                                if t.get('turno', '').upper() == turno_fijo:
+                                    turno_encontrado = t
+                                    break
+                        
+                        if turno_encontrado:
+                            # USAR TURNO FIJO
+                            hora_entrada = turno_encontrado.get('hora_entrada', '')
+                            hora_salida = turno_encontrado.get('hora_salida', '')
+                        else:
+                            # USAR ROTACIÓN AUTOMÁTICA (Fallback)
+                            turno_idx = self._calcular_turno_rotativo(
+                                dia_semana_num,
+                                indice_manip,
+                                len(turnos_sede)
+                            )
+                            turno_asignado = turnos_sede[turno_idx]
+                            hora_entrada = turno_asignado.get('hora_entrada', '')
+                            hora_salida = turno_asignado.get('hora_salida', '')
 
                     # Calcular total de horas
                     total_horas = self._calcular_total_horas(hora_entrada, hora_salida)

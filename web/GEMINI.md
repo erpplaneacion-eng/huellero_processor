@@ -53,6 +53,23 @@ The system exposes webhooks to receive real-time updates from AppSheet applicati
 - **Security**: Protected by a shared secret token (`WEBHOOK_SECRET_TOKEN`).
 - **Action**: Automatically creates/updates the `novedades_cali` sheet in the connected Google Spreadsheet.
 
+### Novedades Cali Persistence Logic
+The daily automation (`nomina_cali_diaria`) includes an intelligent persistence layer for employee novelties:
+- **Active Range Detection**: For every employee, the system checks the `novedades_cali` sheet. If the current processing date falls between the novelty's `FECHA` and `FECHA FINAL`, the novelty is considered **Active**.
+- **Automated Record Modification**:
+    - **Total Hours**: Automatically set to **0** for the duration of the novelty.
+    - **Type**: Inherits the `TIPO TIEMPO LABORADO` from the novelty (e.g., *INCAPACIDAD*, *DIAS NO CLASE*).
+    - **Status**: Sets `NOVEDAD` to `SI` and carries over the `FECHA FINAL` and `OBSERVACIONES`.
+- **Normalization Engine**: Implements robust matching by stripping dots, commas, and spaces from Cédulas/IDs, ensuring synchronization even when data formats vary between the Master sheet and AppSheet inputs.
+- **Auto-Reversion**: Once the current date exceeds the `FECHA FINAL`, the system automatically reverts the employee to their standard shift and `P. ALIMENTOS` status.
+
+### Shift Assignment & Rotation Logic
+The system implements a dual-layer logic for daily shift assignment:
+1.  **Exclusion Rule**: Any employee with `Estado` set to `Incapacitada` in the **Manipuladoras** sheet is automatically excluded from the daily generation process, even if they were previously active.
+2.  **Priority 1: Fixed Shift**: The system checks the `TURNOS` column in the **Manipuladoras** sheet. If a specific shift (e.g., "A", "B") is assigned to an employee, that specific schedule is used every day, overriding any rotation.
+2.  **Priority 2: Automatic Rotation**: If the `TURNOS` column is empty, the system applies a rotational formula: `(DayOfWeek + EmployeeIndex) % TotalShifts`. This ensures fair distribution of morning/afternoon shifts across the staff in the same location.
+3.  **Saturday Rule**: Regardless of the shift, Saturdays are generated with empty hours by default.
+
 ## Setup & Usage
 
 ### 1. Environment Setup
