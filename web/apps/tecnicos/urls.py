@@ -1,13 +1,14 @@
 from django.urls import path
 from . import views, webhooks, cron
+from . import views_liquidacion, views_nomina, views_facturacion
 
 app_name = 'tecnicos'
 
 urlpatterns = [
     path('', views.index, name='index'),
-    path('liquidacion-nomina/', views.liquidacion_nomina, name='liquidacion_nomina'),
-    path('nomina-cali/', views.nomina_cali, name='nomina_cali'),
-    path('facturacion/', views.facturacion, name='facturacion'),
+    path('liquidacion-nomina/', views_liquidacion.liquidacion_nomina, name='liquidacion_nomina'),
+    path('nomina-cali/', views_nomina.nomina_cali, name='nomina_cali'),
+    path('facturacion/', views_facturacion.facturacion, name='facturacion'),
 
     # Webhooks para AppSheet
     path('api/webhook/novedad-nomina/', webhooks.webhook_novedad_nomina, name='webhook_novedad_nomina'),
