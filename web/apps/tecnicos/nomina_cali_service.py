@@ -186,9 +186,62 @@ class NominaCaliService:
         """
         return (dia_semana_num + indice_manipuladora) % cantidad_turnos
 
+    def obtener_novedades_activas(self, fecha_proceso):
+        """
+        Obtiene novedades activas desde la hoja 'novedades_cali'.
+        Retorna {cedula_limpia: datos_novedad} si la fecha_proceso está en rango [FECHA, FECHA FINAL].
+        """
+        try:
+            hoja = self.sheets_service.obtener_hoja(self.libro, 'novedades_cali')
+            registros = hoja.get_all_records()
+        except Exception:
+            # Si falla (hoja no existe o error), asumimos sin novedades
+            return {}
+
+        novedades = {}
+        fecha_proceso_date = fecha_proceso if isinstance(fecha_proceso, date) else date.today()
+
+        for fila in registros:
+            # Obtener fechas y cédula
+            f_inicio_str = str(fila.get('FECHA', '')).strip()
+            f_fin_str = str(fila.get('FECHA FINAL', '')).strip()
+            cedula = str(fila.get('CEDULA', '')).strip()
+
+            if not f_inicio_str or not f_fin_str or not cedula:
+                continue
+            
+            # Normalizar cédula (quitar puntos) para comparación robusta
+            cedula_limpia = cedula.replace('.', '').replace(',', '').strip()
+
+            try:
+                # Intentar parsear YYYY-MM-DD (ISO) o DD/MM/YYYY
+                try:
+                    f_inicio = datetime.strptime(f_inicio_str, '%Y-%m-%d').date()
+                except ValueError:
+                    f_inicio = datetime.strptime(f_inicio_str, '%d/%m/%Y').date()
+
+                try:
+                    f_fin = datetime.strptime(f_fin_str, '%Y-%m-%d').date()
+                except ValueError:
+                    f_fin = datetime.strptime(f_fin_str, '%d/%m/%Y').date()
+                
+                # Verificar rango (inclusive)
+                if f_inicio <= fecha_proceso_date <= f_fin:
+                    novedades[cedula_limpia] = {
+                        'tipo_tiempo': fila.get('TIPO TIEMPO LABORADO', ''),
+                        'fecha_final': f_fin_str,
+                        'dia_final': fila.get('DIA FINAL', ''),
+                        'observaciones': fila.get('OBSERVACIONES', '') or fila.get('OBSERVACION', '')
+                    }
+            except ValueError:
+                continue
+
+        return novedades
+
     def generar_registros_dia(self, fecha=None):
         """
         Genera los registros de nómina para un día específico.
+        Verifica novedades activas antes de asignar turnos rotativos.
 
         Para sedes con múltiples turnos y manipuladoras, rota los turnos
         usando la fórmula: (día_semana + índice_manipuladora) % cantidad_turnos
@@ -215,6 +268,7 @@ class NominaCaliService:
         manipuladoras = self.obtener_manipuladoras_activas()
         supervisores = self.obtener_supervisores()
         horarios = self.obtener_horarios()
+        novedades_activas = self.obtener_novedades_activas(fecha)
 
         # Agrupar manipuladoras por sede para asignar índices
         manip_por_sede = defaultdict(list)
@@ -237,7 +291,9 @@ class NominaCaliService:
 
                 # Datos de la manipuladora
                 nombre = manip.get('Nombre', '')
-                cedula = manip.get('No. Documento', '')
+                cedula_raw = str(manip.get('No. Documento', '')).strip()
+                cedula_limpia = cedula_raw.replace('.', '').replace(',', '').strip()
+                
                 sede = manip.get('sede educativa', '')
                 supervisor_nombre = manip.get('SUPERVISOR', '')
 
@@ -245,32 +301,57 @@ class NominaCaliService:
                 sup_info = supervisores.get(supervisor_nombre.upper(), {})
                 user = sup_info.get('user', '')
 
-                # Determinar horario según rotación de turnos
-                if es_sabado:
-                    # Sábados: horas vacías
+                # --- VERIFICAR NOVEDAD ACTIVA ---
+                # Buscar usando la cédula normalizada
+                novedad_info = novedades_activas.get(cedula_limpia)
+                
+                if novedad_info:
+                    # CASO: Novedad Activa
+                    # Se mantiene la novedad y fecha final hasta que expire
+                    tipo_tiempo = novedad_info['tipo_tiempo']
+                    novedad_val = 'SI'
+                    fecha_final = novedad_info['fecha_final']
+                    dia_final = novedad_info['dia_final']
+                    observaciones = novedad_info['observaciones']
+                    
                     hora_entrada = ''
                     hora_salida = ''
-                elif not turnos_sede:
-                    # Sede sin horario registrado
-                    hora_entrada = ''
-                    hora_salida = ''
-                elif len(turnos_sede) == 1:
-                    # Sede con un solo turno - asignar directamente
-                    hora_entrada = turnos_sede[0].get('hora_entrada', '')
-                    hora_salida = turnos_sede[0].get('hora_salida', '')
+                    total_horas = '0'
+                    
                 else:
-                    # Sede con múltiples turnos - calcular rotación
-                    turno_idx = self._calcular_turno_rotativo(
-                        dia_semana_num,
-                        indice_manip,
-                        len(turnos_sede)
-                    )
-                    turno_asignado = turnos_sede[turno_idx]
-                    hora_entrada = turno_asignado.get('hora_entrada', '')
-                    hora_salida = turno_asignado.get('hora_salida', '')
+                    # CASO: Normal (P. ALIMENTOS)
+                    tipo_tiempo = self.TIPO_TIEMPO_LABORADO
+                    novedad_val = ''
+                    fecha_final = fecha_str
+                    dia_final = dia_semana
+                    observaciones = ''
 
-                # Calcular total de horas
-                total_horas = self._calcular_total_horas(hora_entrada, hora_salida)
+                    # Determinar horario según rotación de turnos
+                    if es_sabado:
+                        # Sábados: horas vacías
+                        hora_entrada = ''
+                        hora_salida = ''
+                    elif not turnos_sede:
+                        # Sede sin horario registrado
+                        hora_entrada = ''
+                        hora_salida = ''
+                    elif len(turnos_sede) == 1:
+                        # Sede con un solo turno - asignar directamente
+                        hora_entrada = turnos_sede[0].get('hora_entrada', '')
+                        hora_salida = turnos_sede[0].get('hora_salida', '')
+                    else:
+                        # Sede con múltiples turnos - calcular rotación
+                        turno_idx = self._calcular_turno_rotativo(
+                            dia_semana_num,
+                            indice_manip,
+                            len(turnos_sede)
+                        )
+                        turno_asignado = turnos_sede[turno_idx]
+                        hora_entrada = turno_asignado.get('hora_entrada', '')
+                        hora_salida = turno_asignado.get('hora_salida', '')
+
+                    # Calcular total de horas
+                    total_horas = self._calcular_total_horas(hora_entrada, hora_salida)
 
                 registro = [
                     id_registro,                # ID
@@ -278,18 +359,18 @@ class NominaCaliService:
                     user,                       # user
                     self.MODALIDAD,             # MODALIDAD (constante)
                     sede,                       # DESCRIPCION PROYECTO
-                    self.TIPO_TIEMPO_LABORADO,  # TIPO TIEMPO LABORADO (constante)
-                    cedula,                     # CEDULA
+                    tipo_tiempo,                # TIPO TIEMPO LABORADO
+                    cedula_raw,                 # CEDULA (usamos la original)
                     nombre,                     # NOMBRE COLABORADOR
                     fecha_str,                  # FECHA
                     dia_semana,                 # DIA
                     hora_entrada,               # HORA INICIAL
                     hora_salida,                # HORA FINAL
                     total_horas,                # TOTAL_HORAS
-                    '',                         # NOVEDAD (vacío por defecto)
-                    fecha_str,                  # FECHA FINAL (igual a FECHA)
-                    dia_semana,                 # DIA FINAL (igual a DIA)
-                    ''                          # OBSERVACIONES (vacío por defecto)
+                    novedad_val,                # NOVEDAD
+                    fecha_final,                # FECHA FINAL
+                    dia_final,                  # DIA FINAL
+                    observaciones               # OBSERVACIONES
                 ]
                 registros.append(registro)
 
