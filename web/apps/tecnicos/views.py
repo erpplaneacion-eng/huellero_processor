@@ -532,7 +532,7 @@ def nomina_cali(request):
         service = GoogleSheetsService()
         libro = service.abrir_libro()
 
-        # ========== 1. NOVEDADES DE NOMINA_CALI (NOVEDAD=SI) ==========
+        # ========== 1. NOVEDADES DE NOMINA_CALI (NOVEDAD=SI) - AGRUPADAS ==========
         try:
             hoja_nomina = service.obtener_hoja(libro, nombre_hoja='nomina_cali')
             datos_nomina = service.leer_datos(hoja_nomina)
@@ -553,11 +553,17 @@ def nomina_cali(request):
                 idx_h_ini = headers_dict.get('HORAINICIAL', -1)
                 idx_h_fin = headers_dict.get('HORAFINAL', -1)
                 idx_supervisor = headers_dict.get('SUPERVISOR', -1)
+                idx_cedula = headers_dict.get('CEDULA', -1)
+                idx_observaciones = headers_dict.get('OBSERVACIONES', -1)
+                idx_total_horas = headers_dict.get('TOTALHORAS', -1)
+
+                # Diccionario para agrupar novedades por (cedula, tipo, observacion)
+                novedades_agrupadas = {}
 
                 for fila in datos_nomina[1:]:
                     if len(fila) <= max(idx_fecha, idx_novedad):
                         continue
-                    
+
                     fecha_str = fila[idx_fecha] if idx_fecha != -1 else ''
                     dia, mes, año = _parsear_fecha(fecha_str)
 
@@ -577,16 +583,22 @@ def nomina_cali(request):
                     # Agregar día a novedades del calendario
                     context['dias_con_novedades'].add(int(dia))
 
+                    # Obtener datos para filtros y agrupación
+                    sup_val = str(fila[idx_supervisor] if idx_supervisor != -1 else '').strip()
+                    sede_val = str(fila[idx_desc_proy] if idx_desc_proy != -1 else '').strip()
+                    cedula = str(fila[idx_cedula] if idx_cedula != -1 else '').strip()
+                    tipo_tiempo = str(fila[idx_tipo] if idx_tipo != -1 else '').strip()
+                    observaciones = str(fila[idx_observaciones] if idx_observaciones != -1 else '').strip()
+                    nombre = str(fila[idx_nombre] if idx_nombre != -1 else '').strip()
+
                     # Filtrar por supervisor
                     if filtro_supervisor:
-                        sup_val = str(fila[idx_supervisor] if idx_supervisor != -1 else '').upper()
-                        if filtro_supervisor.upper() not in sup_val:
+                        if filtro_supervisor.upper() not in sup_val.upper():
                             continue
 
                     # Filtrar por sede
                     if filtro_sede:
-                        sede_val = str(fila[idx_desc_proy] if idx_desc_proy != -1 else '').upper()
-                        if filtro_sede.upper() not in sede_val:
+                        if filtro_sede.upper() not in sede_val.upper():
                             continue
 
                     # Filtrar por días seleccionados
@@ -595,15 +607,74 @@ def nomina_cali(request):
                         if dia_normalizado not in dias_seleccionados:
                             continue
 
-                    # Agregar novedad
+                    # Calcular horas de este registro
+                    horas_registro = 0.0
+                    if idx_total_horas != -1 and len(fila) > idx_total_horas:
+                        horas_registro = _parsear_horas_formato(fila[idx_total_horas])
+
+                    # Obtener hora inicial y final
+                    hora_ini = str(fila[idx_h_ini]).strip() if idx_h_ini != -1 and len(fila) > idx_h_ini else ''
+                    hora_fin = str(fila[idx_h_fin]).strip() if idx_h_fin != -1 and len(fila) > idx_h_fin else ''
+
+                    # Clave de agrupación: (cedula, tipo_tiempo, observaciones)
+                    # Esto agrupa todos los días de una misma novedad
+                    clave_grupo = (cedula, tipo_tiempo, observaciones)
+
+                    if clave_grupo not in novedades_agrupadas:
+                        novedades_agrupadas[clave_grupo] = {
+                            'nombre': nombre,
+                            'descripcion_proyecto': sede_val,
+                            'tipo_tiempo': tipo_tiempo,
+                            'observaciones': observaciones,
+                            'fechas': [],
+                            'dias': [],
+                            'horas_totales': 0.0,
+                            'hora_inicial': '',
+                            'hora_final': ''
+                        }
+
+                    # Agregar fecha y horas al grupo
+                    novedades_agrupadas[clave_grupo]['fechas'].append(fecha_str)
+                    novedades_agrupadas[clave_grupo]['dias'].append(int(dia))
+                    novedades_agrupadas[clave_grupo]['horas_totales'] += horas_registro
+
+                    # Guardar hora inicial/final del primer registro con horas
+                    if hora_ini and not novedades_agrupadas[clave_grupo]['hora_inicial']:
+                        novedades_agrupadas[clave_grupo]['hora_inicial'] = hora_ini
+                    if hora_fin and not novedades_agrupadas[clave_grupo]['hora_final']:
+                        novedades_agrupadas[clave_grupo]['hora_final'] = hora_fin
+
+                # Tipos que deben mostrar 0 horas en el frontend
+                TIPOS_SIN_HORAS = ['DIAS NO CLASE', 'NO ASISTENCIA', 'PERMISO NO REMUNERADO']
+
+                # Convertir grupos a lista de tarjetas
+                for clave, grupo in novedades_agrupadas.items():
+                    dias_ordenados = sorted(grupo['dias'])
+                    fechas_ordenadas = sorted(grupo['fechas'])
+
+                    # Determinar rango de fechas
+                    if len(fechas_ordenadas) == 1:
+                        rango_fechas = fechas_ordenadas[0]
+                    else:
+                        rango_fechas = f"{fechas_ordenadas[0]} - {fechas_ordenadas[-1]}"
+
+                    # Aplicar regla: mostrar 0 horas para ciertos tipos
+                    horas_mostrar = grupo['horas_totales']
+                    if grupo['tipo_tiempo'].upper() in [t.upper() for t in TIPOS_SIN_HORAS]:
+                        horas_mostrar = 0.0
+
                     context['novedades_nomina'].append({
-                        'descripcion_proyecto': fila[idx_desc_proy] if idx_desc_proy != -1 else '',
-                        'tipo_tiempo': fila[idx_tipo] if idx_tipo != -1 else '',
-                        'nombre': fila[idx_nombre] if idx_nombre != -1 else '',
-                        'hora_inicial': fila[idx_h_ini] if idx_h_ini != -1 else '',
-                        'hora_final': fila[idx_h_fin] if idx_h_fin != -1 else '',
-                        'fecha': fecha_str
+                        'nombre': grupo['nombre'],
+                        'descripcion_proyecto': grupo['descripcion_proyecto'],
+                        'tipo_tiempo': grupo['tipo_tiempo'],
+                        'observaciones': grupo['observaciones'],
+                        'fecha': rango_fechas,
+                        'cantidad_dias': len(dias_ordenados),
+                        'horas_totales': horas_mostrar,
+                        'hora_inicial': grupo['hora_inicial'],
+                        'hora_final': grupo['hora_final']
                     })
+
         except Exception as e:
             logger.error(f"Error leyendo nomina_cali: {e}")
 
@@ -620,12 +691,15 @@ def nomina_cali(request):
                     headers_dict[h_norm] = i
 
                 idx_fecha = headers_dict.get('FECHA', -1)
+                idx_fecha_final = headers_dict.get('FECHAFINAL', -1)
                 idx_sede = headers_dict.get('SEDE', -1)
                 idx_nombre = headers_dict.get('NOMBRECOLABORADOR', -1)
                 idx_h_ini = headers_dict.get('HORAINICIAL', -1)
                 idx_h_fin = headers_dict.get('HORAFINAL', -1)
                 idx_total = headers_dict.get('TOTALHORAS', -1)
                 idx_supervisor = headers_dict.get('SUPERVISOR', -1)
+                idx_tipo = headers_dict.get('TIPOTIEMPOLABORADO', -1)
+                idx_observaciones = headers_dict.get('OBSERVACIONES', headers_dict.get('OBSERVACION', -1))
 
                 for fila in datos_novedades[1:]:
                     if len(fila) <= idx_fecha:
@@ -661,13 +735,25 @@ def nomina_cali(request):
                         if dia_normalizado not in dias_seleccionados:
                             continue
 
+                    # Obtener fecha final para mostrar rango
+                    fecha_final_str = str(fila[idx_fecha_final]).strip() if idx_fecha_final != -1 and len(fila) > idx_fecha_final else ''
+
+                    # Determinar rango de fechas
+                    if fecha_final_str and fecha_final_str != fecha_str:
+                        rango_fechas = f"{fecha_str} - {fecha_final_str}"
+                    else:
+                        rango_fechas = fecha_str
+
                     context['novedades_cali'].append({
                         'sede': fila[idx_sede] if idx_sede != -1 else '',
                         'nombre': fila[idx_nombre] if idx_nombre != -1 else '',
                         'hora_inicial': fila[idx_h_ini] if idx_h_ini != -1 else '',
                         'hora_final': fila[idx_h_fin] if idx_h_fin != -1 else '',
                         'total_horas': fila[idx_total] if idx_total != -1 else '',
-                        'fecha': fecha_str
+                        'fecha': fecha_str,
+                        'rango_fechas': rango_fechas,
+                        'tipo_tiempo': fila[idx_tipo] if idx_tipo != -1 and len(fila) > idx_tipo else '',
+                        'observaciones': fila[idx_observaciones] if idx_observaciones != -1 and len(fila) > idx_observaciones else ''
                     })
         except Exception as e:
             logger.error(f"Error leyendo novedades_cali: {e}")

@@ -97,10 +97,17 @@
                     <div class="novedad-card__nombre">{{ nov.nombre }}</div>
                     <div class="novedad-card__sede">📍 {{ nov.descripcion_proyecto }}</div>
                     <div class="novedad-card__detalle">
-                        <span class="novedad-card__badge">{{ nov.tipo_tiempo }}</span>
-                        <span class="novedad-card__badge">🕐 {{ nov.hora_inicial }} - {{ nov.hora_final }}</span>
-                        <span class="novedad-card__fecha">📅 {{ nov.fecha }}</span>
+                        <span class="novedad-card__badge novedad-card__badge--tipo">{{ nov.tipo_tiempo }}</span>
+                        <span class="novedad-card__badge novedad-card__badge--dias">📆 {{ nov.cantidad_dias }} día{{ nov.cantidad_dias|pluralize:"s" }}</span>
+                        <span class="novedad-card__horas {% if nov.horas_totales == 0 %}novedad-card__horas--zero{% endif %}">⏱️ {{ nov.horas_totales|floatformat:1 }}h</span>
                     </div>
+                    {% if nov.hora_inicial or nov.hora_final %}
+                        <div class="novedad-card__horario">🕐 {{ nov.hora_inicial|default:"-" }} - {{ nov.hora_final|default:"-" }}</div>
+                    {% endif %}
+                    <div class="novedad-card__fechas">📅 {{ nov.fecha }}</div>
+                    {% if nov.observaciones %}
+                        <div class="novedad-card__obs">💬 {{ nov.observaciones|truncatewords:10 }}</div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             {% else %}
@@ -197,16 +204,22 @@
 
             {% if novedades_cali %}
                 {% for nov in novedades_cali %}
-                <div class="novedad-card">
+                <div class="novedad-card novedad-card--appsheet">
                     <div class="novedad-card__nombre">{{ nov.nombre }}</div>
                     <div class="novedad-card__sede">📍 {{ nov.sede }}</div>
                     <div class="novedad-card__detalle">
-                        <span class="novedad-card__badge">🕐 {{ nov.hora_inicial }} - {{ nov.hora_final }}</span>
-                        {% if nov.total_horas %}
-                            <span class="novedad-card__horas">⏱️ {{ nov.total_horas }}h</span>
+                        {% if nov.tipo_tiempo %}
+                            <span class="novedad-card__badge novedad-card__badge--tipo">{{ nov.tipo_tiempo }}</span>
                         {% endif %}
-                        <span class="novedad-card__fecha">📅 {{ nov.fecha }}</span>
+                        <span class="novedad-card__horas">⏱️ {{ nov.total_horas|default:"0" }}h</span>
                     </div>
+                    {% if nov.hora_inicial or nov.hora_final %}
+                        <div class="novedad-card__horario">🕐 {{ nov.hora_inicial|default:"-" }} - {{ nov.hora_final|default:"-" }}</div>
+                    {% endif %}
+                    <div class="novedad-card__fechas">📅 {{ nov.rango_fechas }}</div>
+                    {% if nov.observaciones %}
+                        <div class="novedad-card__obs">💬 {{ nov.observaciones|truncatewords:10 }}</div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             {% else %}
