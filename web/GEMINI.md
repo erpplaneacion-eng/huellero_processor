@@ -64,11 +64,11 @@ The daily automation (`nomina_cali_diaria`) includes an intelligent persistence 
 - **Auto-Reversion**: Once the current date exceeds the `FECHA FINAL`, the system automatically reverts the employee to their standard shift and `P. ALIMENTOS` status.
 
 ### Shift Assignment & Rotation Logic
-The system implements a dual-layer logic for daily shift assignment:
+The system implements a triple-layer logic for daily shift assignment:
 1.  **Exclusion Rule**: Any employee with `Estado` set to `Incapacitada` in the **Manipuladoras** sheet is automatically excluded from the daily generation process, even if they were previously active.
 2.  **Priority 1: Fixed Shift**: The system checks the `TURNOS` column in the **Manipuladoras** sheet. If a specific shift (e.g., "A", "B") is assigned to an employee, that specific schedule is used every day, overriding any rotation.
-2.  **Priority 2: Automatic Rotation**: If the `TURNOS` column is empty, the system applies a rotational formula: `(DayOfWeek + EmployeeIndex) % TotalShifts`. This ensures fair distribution of morning/afternoon shifts across the staff in the same location.
-3.  **Saturday Rule**: Regardless of the shift, Saturdays are generated with empty hours by default.
+3.  **Priority 2: Automatic Rotation**: If the `TURNOS` column is empty, the system applies a rotational formula: `(DayOfWeek + EmployeeIndex) % TotalShifts`. This ensures fair distribution of morning/afternoon shifts across the staff in the same location.
+4.  **Saturday Rule**: Regardless of the shift, Saturdays are generated with empty hours by default.
 
 ## Setup & Usage
 
