@@ -805,9 +805,12 @@ def nomina_cali(request):
 
                 # Actualizar resumen (solo sumar de Nómina para no duplicar stats)
                 if tipo_fuente == 'nomina':
+                    # Contar días con novedad (independiente de horas)
                     if novedad_val == 'SI':
                         obj['resumen']['dias_novedad'] += 1
-                    elif horas > 0:
+                    # Contar días/horas trabajadas (independiente de novedad)
+                    # Así un día con accidente que trabajó 11h cuenta en AMBOS
+                    if horas > 0:
                         obj['resumen']['dias_trabajados'] += 1
                         obj['resumen']['total_horas'] += horas
 

@@ -107,11 +107,21 @@ function mostrarDetalle(cedula) {
         let titulo = `Día ${i}: Sin registro`;
 
         if (registro) {
-            if (registro.novedad === 'SI') {
+            const tieneHoras = registro.horas > 0;
+            const tieneNovedad = registro.novedad === 'SI';
+
+            if (tieneHoras && tieneNovedad) {
+                // CASO MIXTO: Trabajó horas pero también tiene novedad (ej: accidente ese día)
+                casillaClase += ' timeline-dia__casilla--mixto';
+                contenido = registro.horas + '⚠️';
+                titulo = `${registro.fecha}\nHoras: ${registro.horas}\nNovedad: ${registro.tipo}`;
+            } else if (tieneNovedad) {
+                // Solo novedad, sin horas (ej: incapacidad completa)
                 casillaClase += ' timeline-dia__casilla--novedad';
                 contenido = '⚠️';
                 titulo = `${registro.fecha}\nNovedad: ${registro.tipo}`;
-            } else if (registro.horas > 0) {
+            } else if (tieneHoras) {
+                // Turno normal con horas
                 casillaClase += ' timeline-dia__casilla--trabajado';
                 contenido = registro.horas;
                 titulo = `${registro.fecha}\nHoras: ${registro.horas}\nTurno Normal`;
