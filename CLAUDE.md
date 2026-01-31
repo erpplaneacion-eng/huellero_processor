@@ -207,10 +207,39 @@ Uses `_obtener_datos_filtrados()` helper function for common filtering logic:
 - Días Raciones: Count of records with `TOTAL RACIONES > 0`
 - Inconsistencias: Records with hours but no rations OR rations but no hours
 
-**Nómina Cali Features:**
-- Calculates total hours from HORA INICIAL/HORA FINAL
-- Shows supervisor chips with days reported per supervisor
-- Handles nocturnal shifts (entry one day, exit next morning)
+**Nómina Cali Features (`/supervision/nomina-cali/`):**
+
+The view displays a 3-column layout for auditing and cross-referencing:
+
+| Column | Source | Purpose |
+|--------|--------|---------|
+| Left: "Nómina al día" | `nomina_cali` (NOVEDAD=SI) | Grouped novedades already processed in payroll |
+| Center | Calendar | Visual day selection with color-coded status |
+| Right: "Novedades Cali" | `novedades_cali` | Raw novedades from AppSheet webhook |
+
+**Novedad Grouping (Left Column):**
+Records from `nomina_cali` with `NOVEDAD=SI` are grouped by `(cedula, tipo_tiempo, observaciones)`. A 4-day incapacity shows as 1 card with date range instead of 4 separate cards.
+
+**Collaborator Detail Panel:**
+Clicking any collaborator name opens a bottom panel with:
+- Monthly timeline (31 day boxes): green=worked, yellow=novedad, gray=no record
+- Summary stats: días trabajados, total horas, días novedad
+- Data comes from `asistencia_data` JSON passed to template via `json_script`
+
+**Hour Calculation:**
+Hours are calculated dynamically from `HORA_INICIAL` and `HORA_FINAL`, NOT from `TOTAL_HORAS` column:
+- Backend: `_calcular_horas_desde_rango()` in views.py
+- Frontend: `calcularDiferenciaHoras()` in nomina_cali.js
+- Supports formats: `HH:MM`, `HH:MM:SS`, `5:30:00 a. m.`, `1:30:00 p. m.`
+- Handles nocturnal shifts (when end time < start time, adds 24h)
+
+**Types Without Hours (Left Column Only):**
+These `TIPO TIEMPO LABORADO` values display 0 hours regardless of actual time:
+- `DIAS NO CLASE`
+- `NO ASISTENCIA`
+- `PERMISO NO REMUNERADO`
+
+This rule does NOT apply to the right column (novedades_cali).
 
 **Shift Rotation (Multiple Turnos):**
 
@@ -228,15 +257,24 @@ Example for sede with 2 shifts (A, B) and 3 manipuladoras:
 
 5 sedes currently have both multiple shifts AND multiple manipuladoras.
 
-**Hour Parsing:**
+**Hour Parsing Functions (`views.py`):**
 - `_parsear_horas_formato()`: Converts "HH:MM" to decimal (e.g., "5:30" → 5.5)
 - `_parsear_hora()`: Parses time strings to datetime objects
+- `_parsear_hora_a_minutos()`: Parses hours to minutes, supports AM/PM formats like "5:30:00 a. m."
+- `_calcular_horas_desde_rango()`: Calculates hour difference, handles nocturnal shifts
 
 ### Templates and Static Files
 
 - Templates: `web/templates/{users,logistica,tecnicos}/` — Keep CSS/JS separate, use `{% static %}` tags
-- Static: `web/static/css/` (styles.css for logística, supervision.css for supervisión), `web/static/js/app.js`
-- Key CSS patterns in supervision.css: `.stat-card--{info,success,danger,warning}`, `.sup-chip`, `.row-alert`
+- Static CSS: `web/static/css/` (styles.css for logística, supervision.css for supervisión)
+- Static JS: `web/static/js/app.js`, `web/static/js/nomina_cali.js`
+- Key CSS patterns in supervision.css: `.stat-card--{info,success,danger,warning}`, `.sup-chip`, `.row-alert`, `.novedad-card`, `.timeline-dia`
+
+**nomina_cali.js Functions:**
+- `calcularHorasTarjetas()`: Calculates hours dynamically for cards with `.js-calc-horas` class
+- `parsearHoraAMinutos()`: Parses hour strings including AM/PM formats
+- `mostrarDetalle()`: Opens collaborator detail panel with timeline
+- `hacerNombresClickeables()`: Makes collaborator names clickable
 
 ### Configuration (`config.py`)
 

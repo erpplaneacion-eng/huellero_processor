@@ -58,17 +58,25 @@ The daily automation (`nomina_cali_diaria`) includes an intelligent persistence 
 - **Active Range Detection**: For every employee, the system checks the `novedades_cali` sheet. If the current processing date falls between the novelty's `FECHA` and `FECHA FINAL`, the novelty is considered **Active**.
 - **Automated Record Modification**:
     - **Total Hours**: Automatically set to **0** for the duration of the novelty.
-    - **Type**: Inherits the `TIPO TIEMPO LABORADO` from the novelty (e.g., *INCAPACIDAD*, *DIAS NO CLASE*).
+    - **Type**: Inherits the `TIPO TIEMPO LABORADO` from the novelty (e.g., *INCAPACIDAD*, *DIAS NO CLASE*, *ACCIDENTE LABORAL*, *PERMISO NO REMUNERADO*).
     - **Status**: Sets `NOVEDAD` to `SI` and carries over the `FECHA FINAL` and `OBSERVACIONES`.
-- **Normalization Engine**: Implements robust matching by stripping dots, commas, and spaces from Cédulas/IDs, ensuring synchronization even when data formats vary between the Master sheet and AppSheet inputs.
-- **Auto-Reversion**: Once the current date exceeds the `FECHA FINAL`, the system automatically reverts the employee to their standard shift and `P. ALIMENTOS` status.
+- **Normalization Engine (Data Integrity)**: To prevent matching failures due to formatting, the system implements a robust normalization layer that strips dots, commas, and spaces from Cédulas/IDs. This ensures perfect synchronization between the Master sheet (`Manipuladoras`) and AppSheet novelty reports.
+- **Auto-Reversion**: Once the current date exceeds the `FECHA FINAL`, the system automatically reverts the employee to their standard shift and `P. ALIMENTOS` status without human intervention.
 
 ### Shift Assignment & Rotation Logic
-The system implements a triple-layer logic for daily shift assignment:
-1.  **Exclusion Rule**: Any employee with `Estado` set to `Incapacitada` in the **Manipuladoras** sheet is automatically excluded from the daily generation process, even if they were previously active.
-2.  **Priority 1: Fixed Shift**: The system checks the `TURNOS` column in the **Manipuladoras** sheet. If a specific shift (e.g., "A", "B") is assigned to an employee, that specific schedule is used every day, overriding any rotation.
+The system implements a triple-layer logic for daily shift assignment to handle complex staffing scenarios:
+1.  **Exclusion Rule (Master Status)**: Any employee with `Estado` set to `Incapacitada` or any status other than `Activo` in the **Manipuladoras** sheet is automatically excluded from the daily generation process.
+2.  **Priority 1: Fixed Shift**: The system checks the `TURNOS` column in the **Manipuladoras** sheet. If a specific shift (e.g., "A", "B") is assigned, that schedule is used every day, overriding any rotation. This is used for employees with fixed schedules in multi-shift locations.
 3.  **Priority 2: Automatic Rotation**: If the `TURNOS` column is empty, the system applies a rotational formula: `(DayOfWeek + EmployeeIndex) % TotalShifts`. This ensures fair distribution of morning/afternoon shifts across the staff in the same location.
-4.  **Saturday Rule**: Regardless of the shift, Saturdays are generated with empty hours by default.
+4.  **Saturday Rule**: Saturdays are always generated with empty hours by default, regardless of the assigned shift or rotation.
+
+### Web Interface & Auditor Tool
+The **Nómina Cali** module (`/tecnicos/nomina-cali/`) has been transformed into a powerful audit and diagnosis dashboard:
+- **Unified Monthly Data Map**: The backend fuses data from `nomina_cali`, `novedades_cali`, and `facturacion`. This creates a complete "Radiography" of the month for every employee.
+- **Monthly History Panel (Timeline)**: A new interactive section at the bottom of the page displays the full monthly history of a selected employee.
+    - **Visual Grid**: A 31-day horizontal timeline showing Worked Days (Green), Novelties/Absences (Yellow), and Mixed status.
+    - **One-Click Audit**: Clicking on any name in the novelty lists instantly populates the timeline, allowing coordinators to verify if reported novelties from AppSheet have been correctly reflected in the payroll records.
+    - **Aggregated Stats**: Instant calculation of total hours worked and total days of novelty for the current month.
 
 ## Setup & Usage
 
