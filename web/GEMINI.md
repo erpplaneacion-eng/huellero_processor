@@ -109,6 +109,14 @@ python manage.py runserver
     - Receive webhooks from AppSheet for instant "Novedad" reporting.
     - Automated daily tasks via Cron endpoints.
 
+### Web Interface Improvements (Audit & Traceability)
+The **Nómina Cali** module (`/tecnicos/nomina-cali/`) has been upgraded to serve as a comprehensive audit tool:
+- **Unified Data Map**: The backend now fuses data from three sources (`nomina_cali`, `novedades_cali`, `facturacion`) into a single Master JSON object injected into the frontend. This ensures complete visibility of an employee's status regardless of the source.
+- **Interactive Detail Panel**: A new bottom section allows coordinators to click on any employee name to reveal their full monthly history.
+    - **Visual Timeline**: A 31-day horizontal grid showing Worked Days (Green), Novelties (Yellow), and Absences.
+    - **Instant Summary**: Real-time calculation of Total Hours and Days Worked based on the processed data.
+- **Goal**: To transform the view from a simple list into a traceability tool, allowing coordinators to instantly verify if an AppSheet report has been correctly processed into the daily payroll records.
+
 ## Deployment (Railway)
 The project is optimized for Railway.app.
 - `CSRF_TRUSTED_ORIGINS` and `ALLOWED_HOSTS` are automatically configured if `DJANGO_ENV=production`.

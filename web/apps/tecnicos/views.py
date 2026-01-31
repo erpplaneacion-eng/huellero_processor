@@ -93,6 +93,72 @@ def _parsear_horas_formato(val):
     except (ValueError, TypeError, IndexError):
         return 0.0
 
+
+def _parsear_hora_a_minutos(hora_str):
+    """
+    Parsea una hora en varios formatos y retorna minutos desde medianoche.
+    Soporta: HH:MM, HH:MM:SS, "5:30:00 a. m.", "1:30:00 p. m.", etc.
+    Retorna None si no puede parsear.
+    """
+    import re
+
+    if not hora_str or hora_str == '-':
+        return None
+
+    hora_str = str(hora_str).strip().lower()
+
+    # Detectar AM/PM con regex para formatos: pm, p.m, p.m., p. m., p. m
+    es_pm = False
+    es_am = False
+
+    if re.search(r'p\.?\s?m\.?', hora_str):
+        es_pm = True
+        hora_str = re.sub(r'p\.?\s?m\.?', '', hora_str).strip()
+    elif re.search(r'a\.?\s?m\.?', hora_str):
+        es_am = True
+        hora_str = re.sub(r'a\.?\s?m\.?', '', hora_str).strip()
+
+    # Separar por :
+    partes = hora_str.split(':')
+    if len(partes) < 2:
+        return None
+
+    try:
+        horas = int(partes[0])
+        minutos = int(partes[1])
+    except ValueError:
+        return None
+
+    # Convertir 12h a 24h si es necesario
+    if es_pm and horas < 12:
+        horas += 12
+    elif es_am and horas == 12:
+        horas = 0
+
+    return horas * 60 + minutos
+
+
+def _calcular_horas_desde_rango(hora_ini, hora_fin):
+    """
+    Calcula la diferencia de horas entre hora inicial y final.
+    Retorna el valor en horas decimales (ej: 5.5).
+    Maneja turnos nocturnos (cuando hora_fin < hora_ini).
+    """
+    min_ini = _parsear_hora_a_minutos(hora_ini)
+    min_fin = _parsear_hora_a_minutos(hora_fin)
+
+    if min_ini is None or min_fin is None:
+        return 0.0
+
+    diff = min_fin - min_ini
+
+    # Manejar turnos nocturnos (salida al día siguiente)
+    if diff < 0:
+        diff += 24 * 60  # Agregar 24 horas
+
+    return diff / 60.0  # Convertir a horas
+
+
 @login_required
 def index(request):
     """
@@ -607,14 +673,12 @@ def nomina_cali(request):
                         if dia_normalizado not in dias_seleccionados:
                             continue
 
-                    # Calcular horas de este registro
-                    horas_registro = 0.0
-                    if idx_total_horas != -1 and len(fila) > idx_total_horas:
-                        horas_registro = _parsear_horas_formato(fila[idx_total_horas])
-
                     # Obtener hora inicial y final
                     hora_ini = str(fila[idx_h_ini]).strip() if idx_h_ini != -1 and len(fila) > idx_h_ini else ''
                     hora_fin = str(fila[idx_h_fin]).strip() if idx_h_fin != -1 and len(fila) > idx_h_fin else ''
+
+                    # Calcular horas de este registro dinámicamente desde HORA_INICIAL y HORA_FINAL
+                    horas_registro = _calcular_horas_desde_rango(hora_ini, hora_fin)
 
                     # Clave de agrupación: (cedula, tipo_tiempo, observaciones)
                     # Esto agrupa todos los días de una misma novedad

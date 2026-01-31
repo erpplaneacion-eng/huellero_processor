@@ -211,7 +211,10 @@
                         {% if nov.tipo_tiempo %}
                             <span class="novedad-card__badge novedad-card__badge--tipo">{{ nov.tipo_tiempo }}</span>
                         {% endif %}
-                        <span class="novedad-card__horas">⏱️ {{ nov.total_horas|default:"0" }}h</span>
+                        <span class="novedad-card__horas js-calc-horas"
+                              data-hora-ini="{{ nov.hora_inicial }}"
+                              data-hora-fin="{{ nov.hora_final }}"
+                              data-skip-tipo="true">⏱️ --h</span>
                     </div>
                     {% if nov.hora_inicial or nov.hora_final %}
                         <div class="novedad-card__horario">🕐 {{ nov.hora_inicial|default:"-" }} - {{ nov.hora_final|default:"-" }}</div>

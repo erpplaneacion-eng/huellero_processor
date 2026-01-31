@@ -25,7 +25,113 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 3. Hacer clickeables los nombres en las tarjetas
     hacerNombresClickeables();
+
+    // 4. Calcular horas dinámicamente en las tarjetas
+    calcularHorasTarjetas();
 });
+
+/**
+ * Tipos de tiempo que deben mostrar 0 horas (solo aplica a columna izquierda)
+ */
+const TIPOS_SIN_HORAS = ['DIAS NO CLASE', 'NO ASISTENCIA', 'PERMISO NO REMUNERADO'];
+
+/**
+ * Parsea una hora en varios formatos posibles y retorna minutos desde medianoche
+ * Formatos soportados: HH:MM, HH:MM:SS, "5:30:00 a. m.", "1:30:00 p. m.", etc.
+ */
+function parsearHoraAMinutos(horaStr) {
+    if (!horaStr || horaStr === '-') return null;
+
+    horaStr = horaStr.toString().trim().toLowerCase();
+
+    // Detectar AM/PM con varios formatos: "p.m.", "p. m.", "pm", "p.m", etc.
+    let esPM = false;
+    let esAM = false;
+
+    // Regex para detectar PM en formatos: pm, p.m, p.m., p. m., p. m
+    if (/p\.?\s?m\.?/i.test(horaStr)) {
+        esPM = true;
+        horaStr = horaStr.replace(/p\.?\s?m\.?/gi, '').trim();
+    }
+    // Regex para detectar AM en formatos: am, a.m, a.m., a. m., a. m
+    else if (/a\.?\s?m\.?/i.test(horaStr)) {
+        esAM = true;
+        horaStr = horaStr.replace(/a\.?\s?m\.?/gi, '').trim();
+    }
+
+    // Separar por :
+    const partes = horaStr.split(':');
+    if (partes.length < 2) return null;
+
+    let horas = parseInt(partes[0], 10);
+    let minutos = parseInt(partes[1], 10);
+
+    if (isNaN(horas) || isNaN(minutos)) return null;
+
+    // Convertir 12h a 24h si es necesario
+    if (esPM && horas < 12) {
+        horas += 12;
+    } else if (esAM && horas === 12) {
+        horas = 0;
+    }
+
+    return horas * 60 + minutos;
+}
+
+/**
+ * Calcula la diferencia de horas entre hora inicial y final
+ * Retorna el valor en horas decimales (ej: 5.5)
+ */
+function calcularDiferenciaHoras(horaIni, horaFin) {
+    const minIni = parsearHoraAMinutos(horaIni);
+    const minFin = parsearHoraAMinutos(horaFin);
+
+    if (minIni === null || minFin === null) return null;
+
+    let diff = minFin - minIni;
+
+    // Manejar turnos nocturnos (salida al día siguiente)
+    if (diff < 0) {
+        diff += 24 * 60; // Agregar 24 horas
+    }
+
+    return diff / 60; // Convertir a horas
+}
+
+/**
+ * Calcula y muestra las horas en todas las tarjetas con clase .js-calc-horas
+ */
+function calcularHorasTarjetas() {
+    const elementos = document.querySelectorAll('.js-calc-horas');
+
+    elementos.forEach(el => {
+        const horaIni = el.dataset.horaIni || '';
+        const horaFin = el.dataset.horaFin || '';
+        const tipo = (el.dataset.tipo || '').toUpperCase();
+        const skipTipo = el.dataset.skipTipo === 'true';
+
+        // Si el tipo es uno que no debe mostrar horas (solo si no tiene skip)
+        if (!skipTipo && TIPOS_SIN_HORAS.some(t => tipo.includes(t))) {
+            el.textContent = '⏱️ 0.0h';
+            el.classList.add('novedad-card__horas--zero');
+            return;
+        }
+
+        // Calcular horas
+        const horas = calcularDiferenciaHoras(horaIni, horaFin);
+
+        if (horas !== null && horas > 0) {
+            el.textContent = `⏱️ ${horas.toFixed(1)}h`;
+            el.classList.remove('novedad-card__horas--zero');
+        } else {
+            el.textContent = '⏱️ 0.0h';
+            // Solo marcar como zero si no es skip (columna derecha no se marca en rojo por 0)
+            if (!skipTipo) {
+                el.classList.add('novedad-card__horas--zero');
+            }
+        }
+    });
+}
 
 function hacerNombresClickeables() {
     const nombres = document.querySelectorAll('.novedad-card__nombre');
