@@ -229,6 +229,51 @@ class DataCleaner:
 
         return df_limpio
     
+    def autocorregir_entradas_pm(self, df):
+        """
+        Corrige automáticamente registros marcados como "Entrada" en horario PM (13:00 - 16:00)
+        cambiándolos a "Salida". Esto asume que son errores de marcación del empleado.
+        
+        Args:
+            df: DataFrame a procesar
+            
+        Returns:
+            DataFrame con correcciones aplicadas
+        """
+        logger.log_fase("AUTOCORRECCIÓN DE ENTRADAS PM")
+        
+        df_corregido = df.copy()
+        
+        # Filtrar registros que son 'Entrada' y están entre 13:00 y 16:00
+        mask_correccion = (
+            (df_corregido['ESTADO'] == 'Entrada') & 
+            (df_corregido['FECHA_HORA'].dt.hour >= 13) & 
+            (df_corregido['FECHA_HORA'].dt.hour < 16)
+        )
+        
+        # Contar correcciones
+        num_correcciones = mask_correccion.sum()
+        
+        if num_correcciones > 0:
+            # Aplicar corrección
+            df_corregido.loc[mask_correccion, 'ESTADO'] = 'Salida'
+            df_corregido.loc[mask_correccion, 'ESTADO_INFERIDO'] = True # Marcar para rastreo
+            
+            # Log de cambios
+            indices_corregidos = df_corregido[mask_correccion].index
+            for idx in indices_corregidos:
+                registro = df_corregido.loc[idx]
+                logger.info(
+                    f"CORRECCIÓN: {registro['CODIGO']} - {registro['NOMBRE']} | "
+                    f"{registro['FECHA_HORA']} | Entrada -> Salida (Autocorrección PM)"
+                )
+            
+            logger.info(f"✅ Se corrigieron automáticamente {num_correcciones} registros de Entrada -> Salida")
+        else:
+            logger.info("No se encontraron registros para autocorregir en el rango 13:00-16:00")
+            
+        return df_corregido
+
     def procesar(self, ruta_archivo):
         """
         Procesa completo: carga, limpia estructura y elimina duplicados
@@ -241,6 +286,10 @@ class DataCleaner:
         """
         df = self.cargar_archivo(ruta_archivo)
         df = self.limpiar_estructura(df)
+        
+        # Autocorrección ANTES de eliminar duplicados para asegurar consistencia
+        df = self.autocorregir_entradas_pm(df)
+        
         df = self.eliminar_duplicados(df)
         
         logger.info(config.MENSAJES['limpieza_completa'])

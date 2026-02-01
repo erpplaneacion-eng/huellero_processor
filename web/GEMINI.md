@@ -12,6 +12,10 @@ The application is built with **Django** and serves as the frontend and API laye
 - **`apps/`**: Django applications.
     - **`logistica/`**: Main business domain. Handles file uploads and invokes the processing logic.
     - **`tecnicos/`**: Handles specialized technical reports and integrations (Google Sheets, Facturación, Nómina).
+        - `views.py`: Shared utilities and Index view.
+        - `views_liquidacion.py`: Logic for Liquidación Nómina.
+        - `views_nomina.py`: Logic for Nómina Cali (Audit tool).
+        - `views_facturacion.py`: Logic for Facturación.
         - `webhooks.py`: Handles AppSheet notifications.
         - `cron.py`: Handles scheduled tasks (daily automation).
     - **`users/`**: User authentication and management (login/logout).
