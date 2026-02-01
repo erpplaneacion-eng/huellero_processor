@@ -13,10 +13,10 @@ The system is built around a shared core logic library (`src/`) utilized by both
 
 ### Core Logic (`src/`)
 Located in the project root, this directory contains the business logic modules:
--   **`DataCleaner`**: Removes duplicate biometric scans.
+-   **`DataCleaner`**: Removes duplicate biometric scans. **Nueva Regla:** Autocorrige registros de "Entrada" entre las 13:00 y 16:00 convirtiéndolos en "Salida" para mitigar errores comunes de marcación.
 -   **`StateInference`**: Infers whether a scan is an "Entry" or "Exit" based on context.
 -   **`ShiftBuilder`**: Groups scans into logical work shifts.
--   **`Calculator`**: Computes hours worked. **Feature**: Automatically splits night shifts crossing midnight into two records to respect calendar days in final reports.
+-   **`Calculator`**: Computes hours worked. **Configuración:** Divide automáticamente los turnos que inician a partir de las 16:20 (Umbral Nocturno) si cruzan la medianoche, generando dos registros para respetar los días calendario.
 -   **`ExcelGenerator`**: Produces the final Excel reports and "Special Cases" logs.
 -   **`logger`**: Centralized logging utility.
 
