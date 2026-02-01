@@ -34,6 +34,14 @@
     <div class="filters-card">
         <form method="get" class="filters-form">
             <div class="form-group">
+                <label for="ubicacion" class="form-label">Ubicación</label>
+                <select name="ubicacion" id="ubicacion" class="form-select" onchange="this.form.submit()">
+                    <option value="CALI" {% if filtros.ubicacion == 'CALI' %}selected{% endif %}>Cali</option>
+                    <option value="YUMBO" {% if filtros.ubicacion == 'YUMBO' %}selected{% endif %}>Yumbo</option>
+                </select>
+            </div>
+
+            <div class="form-group">
                 <label for="supervisor" class="form-label">Supervisor</label>
                 <input type="text" name="supervisor" id="supervisor" class="form-input" 
                        placeholder="Buscar por supervisor..." value="{{ filtros.supervisor }}">

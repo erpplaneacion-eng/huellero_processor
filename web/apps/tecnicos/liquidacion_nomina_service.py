@@ -9,6 +9,7 @@ import os
 from datetime import datetime, date, timedelta
 from collections import defaultdict
 from apps.tecnicos.google_sheets import GoogleSheetsService
+from apps.tecnicos.constantes import obtener_id_hoja
 
 
 class LiquidacionNominaService:
@@ -45,9 +46,10 @@ class LiquidacionNominaService:
         'NOVEDAD'
     ]
 
-    def __init__(self):
+    def __init__(self, sede='CALI'):
+        self.sede = sede
         self.sheets_service = GoogleSheetsService()
-        self.sheet_id = os.environ.get('GOOGLE_SHEET_ID')
+        self.sheet_id = obtener_id_hoja(sede)
         self.libro = self.sheets_service.abrir_libro(self.sheet_id)
 
     def obtener_nomina_cali(self, fecha=None):
@@ -329,9 +331,9 @@ class LiquidacionNominaService:
         return resultado
 
 
-def ejecutar_liquidacion_hoy():
+def ejecutar_liquidacion_hoy(sede='CALI'):
     """Función helper para ejecutar liquidación del día actual"""
-    service = LiquidacionNominaService()
+    service = LiquidacionNominaService(sede=sede)
     resultado = service.ejecutar_liquidacion_diaria()
     return resultado
 

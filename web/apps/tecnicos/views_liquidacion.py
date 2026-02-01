@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 @login_required
 def liquidacion_nomina(request):
     """Vista para Liquidación Nómina"""
+    from .constantes import obtener_id_hoja
+
     columnas = [
         'SUPERVISOR', 'SEDE', 'FECHA', 'DIA', 'CANT. MANIPULADORAS',
         'TOTAL HORAS', 'HUBO_RACIONES', 'TOTAL RACIONES', 'OBSERVACION', 'NOVEDAD'
@@ -43,12 +45,15 @@ def liquidacion_nomina(request):
     filtro_mes = request.GET.get('mes', '')
     filtro_supervisor = request.GET.get('supervisor', '').strip().lower()
     filtro_sede = request.GET.get('sede', '').strip().lower()
+    filtro_ubicacion = request.GET.get('ubicacion', 'CALI').upper()
+    
     novedades_nomina = {'cantidad': 0, 'fechas': []}
     novedades_facturacion = {'cantidad': 0, 'fechas': []}
 
     try:
         service = GoogleSheetsService()
-        libro = service.abrir_libro()
+        sheet_id = obtener_id_hoja(filtro_ubicacion)
+        libro = service.abrir_libro(sheet_id)
         # nomina_cali usa SUPERVISOR y DESCRIPCION PROYECTO
         novedades_nomina = _obtener_novedades_hoja(
             service, libro, 'nomina_cali',

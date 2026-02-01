@@ -8,10 +8,11 @@ import os
 from datetime import datetime, date
 from collections import defaultdict
 from apps.tecnicos.google_sheets import GoogleSheetsService
+from apps.tecnicos.constantes import obtener_id_hoja
 
 
 class NominaCaliService:
-    """Servicio para generar registros de nómina diaria de Cali"""
+    """Servicio para generar registros de nómina diaria (Cali/Yumbo)"""
 
     DIAS_SEMANA = {
         0: 'Lunes',
@@ -49,9 +50,10 @@ class NominaCaliService:
         'OBSERVACIONES'
     ]
 
-    def __init__(self):
+    def __init__(self, sede='CALI'):
+        self.sede = sede
         self.sheets_service = GoogleSheetsService()
-        self.sheet_id = os.environ.get('GOOGLE_SHEET_ID')
+        self.sheet_id = obtener_id_hoja(sede)
         self.libro = self.sheets_service.abrir_libro(self.sheet_id)
 
     def obtener_manipuladoras_activas(self):
@@ -474,9 +476,9 @@ class NominaCaliService:
         return resultado
 
 
-def ejecutar_nomina_cali_hoy():
+def ejecutar_nomina_cali_hoy(sede='CALI'):
     """Función helper para ejecutar nómina del día actual"""
-    service = NominaCaliService()
+    service = NominaCaliService(sede=sede)
     resultado = service.ejecutar_nomina_diaria()
     return resultado
 

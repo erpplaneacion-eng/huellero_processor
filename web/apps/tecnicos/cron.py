@@ -41,7 +41,7 @@ def _validar_token_cron(request):
 @require_http_methods(["GET", "POST"])
 def cron_facturacion(request):
     """
-    Endpoint para ejecutar facturación diaria.
+    Endpoint para ejecutar facturación diaria para TODAS las sedes.
     URL: /supervision/cron/facturacion/?token=<token>
     """
     if not _validar_token_cron(request):
@@ -53,21 +53,27 @@ def cron_facturacion(request):
 
     try:
         from .facturacion_service import FacturacionService
+        from .constantes import SEDES
 
-        logger.info("Ejecutando facturación diaria via cron...")
-        service = FacturacionService()
-        resultado = service.ejecutar_facturacion_diaria()
+        logger.info("Ejecutando facturación diaria via cron (todas las sedes)...")
+        
+        resultados_agg = []
+        
+        for sede_key in SEDES:
+            logger.info(f"Procesando sede: {sede_key}")
+            service = FacturacionService(sede=sede_key)
+            resultado = service.ejecutar_facturacion_diaria()
+            resultados_agg.append({
+                'sede': sede_key,
+                'resultado': resultado
+            })
 
-        logger.info(f"Facturación completada: {resultado['mensaje']}")
+        logger.info(f"Facturación completada para {len(resultados_agg)} sedes")
 
         return JsonResponse({
-            'success': resultado['exito'],
-            'message': resultado['mensaje'],
-            'data': {
-                'fecha': resultado['fecha'],
-                'dia': resultado['dia'],
-                'registros_creados': resultado.get('registros_creados', 0)
-            }
+            'success': True,
+            'message': 'Proceso completado para todas las sedes',
+            'data': resultados_agg
         })
 
     except Exception as e:
@@ -82,11 +88,11 @@ def cron_facturacion(request):
 @require_http_methods(["GET", "POST"])
 def cron_nomina_cali(request):
     """
-    Endpoint para ejecutar nómina Cali diaria.
+    Endpoint para ejecutar nómina diaria para TODAS las sedes.
     URL: /supervision/cron/nomina-cali/?token=<token>
     """
     if not _validar_token_cron(request):
-        logger.warning("Cron nomina_cali: token inválido")
+        logger.warning("Cron nomina: token inválido")
         return JsonResponse({
             'success': False,
             'error': 'Token inválido'
@@ -94,21 +100,27 @@ def cron_nomina_cali(request):
 
     try:
         from .nomina_cali_service import NominaCaliService
+        from .constantes import SEDES
 
-        logger.info("Ejecutando nómina Cali diaria via cron...")
-        service = NominaCaliService()
-        resultado = service.ejecutar_nomina_diaria()
+        logger.info("Ejecutando nómina diaria via cron (todas las sedes)...")
+        
+        resultados_agg = []
+        
+        for sede_key in SEDES:
+            logger.info(f"Procesando sede: {sede_key}")
+            service = NominaCaliService(sede=sede_key)
+            resultado = service.ejecutar_nomina_diaria()
+            resultados_agg.append({
+                'sede': sede_key,
+                'resultado': resultado
+            })
 
-        logger.info(f"Nómina Cali completada: {resultado['mensaje']}")
+        logger.info(f"Nómina completada para {len(resultados_agg)} sedes")
 
         return JsonResponse({
-            'success': resultado['exito'],
-            'message': resultado['mensaje'],
-            'data': {
-                'fecha': resultado['fecha'],
-                'dia': resultado['dia'],
-                'registros_creados': resultado.get('registros_creados', 0)
-            }
+            'success': True,
+            'message': 'Proceso completado para todas las sedes',
+            'data': resultados_agg
         })
 
     except Exception as e:
@@ -124,6 +136,7 @@ def cron_nomina_cali(request):
 def cron_liquidacion(request):
     """
     Endpoint para ejecutar liquidación de nómina diaria + envío de email.
+    Ejecuta para TODAS las sedes configuradas.
     URL: /supervision/cron/liquidacion/?token=<token>
     Param opcional: ?sin_email=1 para omitir el envío de correo
     """
@@ -137,51 +150,60 @@ def cron_liquidacion(request):
     try:
         from .liquidacion_nomina_service import LiquidacionNominaService
         from .email_service import EmailService
+        from .constantes import SEDES
         from datetime import date
 
         sin_email = request.GET.get('sin_email', '0') == '1'
         fecha = date.today()
 
-        logger.info("Ejecutando liquidación de nómina via cron...")
+        logger.info("Ejecutando liquidación de nómina via cron (todas las sedes)...")
+        
+        resultados_agg = []
+        
+        for sede_key in SEDES:
+            logger.info(f"Procesando liquidación para: {sede_key}")
+            
+            # Ejecutar liquidación
+            service = LiquidacionNominaService(sede=sede_key)
+            registros_generados, msg = service.generar_liquidacion_dia(fecha)
+            resultado = service.ejecutar_liquidacion_diaria()
 
-        # Ejecutar liquidación
-        service = LiquidacionNominaService()
-        registros_generados, msg = service.generar_liquidacion_dia(fecha)
-        resultado = service.ejecutar_liquidacion_diaria()
+            logger.info(f"Liquidación {sede_key} completada: {resultado['mensaje']}")
 
-        logger.info(f"Liquidación completada: {resultado['mensaje']}")
+            # Enviar email si hay registros y no se desactivó
+            email_enviado = False
+            email_error = None
 
-        # Enviar email si hay registros y no se desactivó
-        email_enviado = False
-        email_error = None
-
-        if not sin_email and registros_generados:
-            try:
-                email_service = EmailService()
-                resultado_email = email_service.enviar_reporte_liquidacion(
-                    fecha=fecha,
-                    registros=registros_generados,
-                    resultado=resultado
-                )
-                email_enviado = resultado_email.get('exito', False)
-                if not email_enviado:
-                    email_error = resultado_email.get('mensaje', 'Error desconocido')
-                else:
-                    logger.info("Email de liquidación enviado correctamente")
-            except Exception as e:
-                email_error = str(e)
-                logger.error(f"Error enviando email: {e}")
+            if not sin_email and registros_generados:
+                try:
+                    email_service = EmailService()
+                    resultado_email = email_service.enviar_reporte_liquidacion(
+                        fecha=fecha,
+                        registros=registros_generados,
+                        resultado=resultado
+                    )
+                    email_enviado = resultado_email.get('exito', False)
+                    if not email_enviado:
+                        email_error = resultado_email.get('mensaje', 'Error desconocido')
+                    else:
+                        logger.info(f"Email de liquidación ({sede_key}) enviado correctamente")
+                except Exception as e:
+                    email_error = str(e)
+                    logger.error(f"Error enviando email ({sede_key}): {e}")
+            
+            resultados_agg.append({
+                'sede': sede_key,
+                'resultado': resultado,
+                'email': {
+                    'enviado': email_enviado,
+                    'error': email_error
+                }
+            })
 
         return JsonResponse({
-            'success': resultado['exito'],
-            'message': resultado['mensaje'],
-            'data': {
-                'fecha': resultado['fecha'],
-                'dia': resultado['dia'],
-                'registros_creados': resultado.get('registros_creados', 0),
-                'email_enviado': email_enviado,
-                'email_error': email_error
-            }
+            'success': True,
+            'message': 'Proceso completado para todas las sedes',
+            'data': resultados_agg
         })
 
     except Exception as e:

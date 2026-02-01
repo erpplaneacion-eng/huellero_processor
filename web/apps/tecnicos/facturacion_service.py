@@ -7,6 +7,7 @@ Corporación Hacia un Valle Solidario
 import os
 from datetime import datetime, date
 from apps.tecnicos.google_sheets import GoogleSheetsService
+from apps.tecnicos.constantes import obtener_id_hoja
 
 
 class FacturacionService:
@@ -22,9 +23,10 @@ class FacturacionService:
         6: 'Domingo'
     }
 
-    def __init__(self):
+    def __init__(self, sede='CALI'):
+        self.sede = sede
         self.sheets_service = GoogleSheetsService()
-        self.sheet_id = os.environ.get('GOOGLE_SHEET_ID')
+        self.sheet_id = obtener_id_hoja(sede)
         self.libro = self.sheets_service.abrir_libro(self.sheet_id)
 
     def obtener_sedes(self):
@@ -205,9 +207,9 @@ class FacturacionService:
         return resultado
 
 
-def ejecutar_facturacion_hoy():
+def ejecutar_facturacion_hoy(sede='CALI'):
     """Función helper para ejecutar facturación del día actual"""
-    service = FacturacionService()
+    service = FacturacionService(sede=sede)
     resultado = service.ejecutar_facturacion_diaria()
     return resultado
 

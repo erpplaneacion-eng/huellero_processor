@@ -11,6 +11,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from .google_sheets import GoogleSheetsService
+from .constantes import obtener_id_hoja
 from .views import _parsear_hora
 
 logger = logging.getLogger(__name__)
@@ -26,28 +27,7 @@ def webhook_novedad_nomina(request):
     en la hoja nomina_cali.
 
     Crea un registro en la hoja 'novedades_cali'.
-
-    Esperamos un JSON con la estructura:
-    {
-        "token": "secret-token",
-        "data": {
-            "ID": "NOM-YYYYMMDD-####",
-            "SUPERVISOR": "...",
-            "DESCRIPCION_PROYECTO": "...",
-            "TIPO_TIEMPO_LABORADO": "...",
-            "CEDULA": "...",
-            "NOMBRE_COLABORADOR": "...",
-            "FECHA": "...",
-            "DIA": "...",
-            "HORA_INICIAL": "...",
-            "HORA_FINAL": "...",
-            "NOVEDAD": "SI",
-            "FECHA_FINAL": "...",
-            "DIA_FINAL": "...",
-            "OBSERVACIONES": "...",
-            "OBSERVACION": "..."
-        }
-    }
+    Soporta parámetro GET ?sede=CALI o ?sede=YUMBO
     """
     try:
         # Parsear JSON del body
@@ -84,9 +64,15 @@ def webhook_novedad_nomina(request):
                 'error': 'Solo se procesan registros con NOVEDAD=SI'
             }, status=400)
 
+        # Determinar Sede (Default: Cali)
+        sede_param = request.GET.get('sede', '').upper()
+        if not sede_param:
+            sede_param = payload.get('sede', 'CALI').upper()
+            
         # Conectar a Google Sheets
         service = GoogleSheetsService()
-        libro = service.abrir_libro()
+        sheet_id = obtener_id_hoja(sede_param)
+        libro = service.abrir_libro(sheet_id)
 
         # Obtener o crear la hoja novedades_cali
         nombre_hoja = 'novedades_cali'

@@ -25,6 +25,11 @@ class Command(BaseCommand):
             action='store_true',
             help='Forzar creación aunque ya existan registros para esa fecha',
         )
+        parser.add_argument(
+            '--sede',
+            type=str,
+            help='Sede específica (CALI o YUMBO). Si se omite, ejecuta todas.',
+        )
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.NOTICE('='*60))
@@ -43,25 +48,40 @@ class Command(BaseCommand):
                 return
 
         forzar = options.get('forzar', False)
-
-        try:
-            # Ejecutar facturación
-            service = FacturacionService()
-            resultado = service.ejecutar_facturacion_diaria(fecha=fecha, forzar=forzar)
-
-            # Mostrar resultado
-            self.stdout.write(f"Fecha: {resultado['fecha']}")
-            self.stdout.write(f"Día: {resultado['dia']}")
-
-            if resultado['exito']:
-                self.stdout.write(self.style.SUCCESS(f"✓ {resultado['mensaje']}"))
-                self.stdout.write(self.style.SUCCESS(
-                    f"✓ Registros creados: {resultado['registros_creados']}"
-                ))
+        sede_arg = options.get('sede')
+        
+        from apps.tecnicos.constantes import SEDES
+        
+        sedes_a_procesar = []
+        if sede_arg:
+            if sede_arg.upper() in SEDES:
+                sedes_a_procesar.append(sede_arg.upper())
             else:
-                self.stdout.write(self.style.WARNING(f"⚠ {resultado['mensaje']}"))
+                 self.stdout.write(self.style.ERROR(f"Sede no válida: {sede_arg}. Opciones: {list(SEDES.keys())}"))
+                 return
+        else:
+            sedes_a_procesar = list(SEDES.keys())
 
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"✗ Error: {e}"))
+        for sede_key in sedes_a_procesar:
+            self.stdout.write(f"\n--- Procesando {sede_key} ---")
+            try:
+                # Ejecutar facturación
+                service = FacturacionService(sede=sede_key)
+                resultado = service.ejecutar_facturacion_diaria(fecha=fecha, forzar=forzar)
+
+                # Mostrar resultado
+                self.stdout.write(f"Fecha: {resultado['fecha']}")
+                self.stdout.write(f"Día: {resultado['dia']}")
+
+                if resultado['exito']:
+                    self.stdout.write(self.style.SUCCESS(f"✓ {resultado['mensaje']}"))
+                    self.stdout.write(self.style.SUCCESS(
+                        f"✓ Registros creados: {resultado['registros_creados']}"
+                    ))
+                else:
+                    self.stdout.write(self.style.WARNING(f"⚠ {resultado['mensaje']}"))
+
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"✗ Error: {e}"))
 
         self.stdout.write(self.style.NOTICE('='*60))

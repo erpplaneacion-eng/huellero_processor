@@ -18,11 +18,13 @@ def nomina_cali(request):
     """Vista para Nómina Cali con calendario y novedades de ambas hojas"""
     import calendar
     from datetime import date
+    from .constantes import obtener_id_hoja
 
     # Obtener filtros
     filtro_mes = request.GET.get('mes', '')
     filtro_supervisor = request.GET.get('supervisor', '')
     filtro_sede = request.GET.get('sede', '')
+    filtro_ubicacion = request.GET.get('ubicacion', 'CALI').upper()
     dias_seleccionados = request.GET.getlist('dias')  # Múltiples días
 
     # Si no hay mes seleccionado, usar el mes actual
@@ -39,12 +41,13 @@ def nomina_cali(request):
         dias_mes.append(semana)
 
     context = {
-        'titulo': 'Nómina Cali',
+        'titulo': f'Nómina {filtro_ubicacion.capitalize()}',
         'filtros': {
             'mes': filtro_mes,
             'supervisor': filtro_supervisor,
             'sede': filtro_sede,
-            'dias': dias_seleccionados
+            'dias': dias_seleccionados,
+            'ubicacion': filtro_ubicacion
         },
         'meses': MESES,
         'calendario': {
@@ -69,7 +72,8 @@ def nomina_cali(request):
 
     try:
         service = GoogleSheetsService()
-        libro = service.abrir_libro()
+        sheet_id = obtener_id_hoja(filtro_ubicacion)
+        libro = service.abrir_libro(sheet_id)
 
         # ========== 1. NOVEDADES DE NOMINA_CALI (NOVEDAD=SI) - AGRUPADAS ==========
         try:

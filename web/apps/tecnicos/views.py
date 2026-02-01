@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from .google_sheets import GoogleSheetsService
+from .constantes import obtener_id_hoja
 import logging
 from datetime import datetime, timedelta
 
@@ -182,10 +183,12 @@ def _obtener_datos_filtrados(request, nombre_hoja, columnas_map, titulo_vista, c
     filtro_supervisor = request.GET.get('supervisor', '').strip().lower()
     filtro_mes = request.GET.get('mes', '')
     filtro_sede = request.GET.get('sede', '').strip().lower()
+    filtro_ubicacion = request.GET.get('ubicacion', 'CALI').upper()
 
     try:
         service = GoogleSheetsService()
-        libro = service.abrir_libro()
+        sheet_id = obtener_id_hoja(filtro_ubicacion)
+        libro = service.abrir_libro(sheet_id)
         
         try:
             hoja = service.obtener_hoja(libro, nombre_hoja=nombre_hoja)
@@ -313,7 +316,7 @@ def _obtener_datos_filtrados(request, nombre_hoja, columnas_map, titulo_vista, c
         'rows': data,
         'error_message': error_message,
         'titulo': titulo_vista,
-        'filtros': {'supervisor': filtro_supervisor, 'mes': filtro_mes, 'sede': filtro_sede},
+        'filtros': {'supervisor': filtro_supervisor, 'mes': filtro_mes, 'sede': filtro_sede, 'ubicacion': filtro_ubicacion},
         'meses': MESES
     }
 

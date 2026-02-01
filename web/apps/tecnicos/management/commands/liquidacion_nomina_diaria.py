@@ -29,6 +29,11 @@ class Command(BaseCommand):
             action='store_true',
             help='No enviar correo de notificación'
         )
+        parser.add_argument(
+            '--sede',
+            type=str,
+            help='Sede específica (CALI o YUMBO). Si se omite, ejecuta todas.',
+        )
 
     def handle(self, *args, **options):
         self.stdout.write(self.style.NOTICE('='*60))
@@ -57,79 +62,91 @@ class Command(BaseCommand):
 
         if sin_email:
             self.stdout.write(self.style.WARNING('Notificación por email desactivada'))
-
-        registros_generados = []
-
-        try:
-            # Ejecutar servicio de liquidación
-            service = LiquidacionNominaService()
-
-            # Primero generar registros para tenerlos disponibles para el email
-            if fecha is None:
-                from datetime import date
-                fecha = date.today()
-
-            registros_generados, msg = service.generar_liquidacion_dia(fecha)
-
-            # Ejecutar liquidación completa
-            resultado = service.ejecutar_liquidacion_diaria(fecha=fecha, forzar=forzar)
-
-            # Mostrar resultado
-            self.stdout.write('')
-            self.stdout.write(f"Fecha: {resultado['fecha']} ({resultado['dia']})")
-
-            if resultado['exito']:
-                self.stdout.write(
-                    self.style.SUCCESS(f"✓ {resultado['mensaje']}")
-                )
-                if resultado['registros_creados'] > 0:
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"✓ Registros insertados: {resultado['registros_creados']}"
-                        )
-                    )
+            
+        sede_arg = options.get('sede')
+        from apps.tecnicos.constantes import SEDES
+        
+        sedes_a_procesar = []
+        if sede_arg:
+            if sede_arg.upper() in SEDES:
+                sedes_a_procesar.append(sede_arg.upper())
             else:
-                self.stdout.write(
-                    self.style.WARNING(f"⚠ {resultado['mensaje']}")
-                )
+                 self.stdout.write(self.style.ERROR(f"Sede no válida: {sede_arg}. Opciones: {list(SEDES.keys())}"))
+                 return
+        else:
+            sedes_a_procesar = list(SEDES.keys())
 
-            # Enviar correo si hay registros y no se desactivó
-            if not sin_email and registros_generados:
-                self.stdout.write('')
-                self.stdout.write(self.style.NOTICE('Enviando notificación por email...'))
+        for sede_key in sedes_a_procesar:
+            self.stdout.write(f"\n--- Procesando {sede_key} ---")
+            registros_generados = []
 
-                try:
-                    email_service = EmailService()
-                    resultado_email = email_service.enviar_reporte_liquidacion(
-                        fecha=fecha,
-                        registros=registros_generados,
-                        resultado=resultado
-                    )
+            try:
+                # Ejecutar servicio de liquidación
+                service = LiquidacionNominaService(sede=sede_key)
 
-                    if resultado_email['exito']:
-                        self.stdout.write(
-                            self.style.SUCCESS(f"✓ {resultado_email['mensaje']}")
-                        )
-                    else:
-                        self.stdout.write(
-                            self.style.ERROR(f"✗ {resultado_email['mensaje']}")
-                        )
+                # Primero generar registros para tenerlos disponibles para el email
+                if fecha is None:
+                    from datetime import date
+                    fecha = date.today()
 
-                except Exception as e:
+                registros_generados, msg = service.generar_liquidacion_dia(fecha)
+
+                # Ejecutar liquidación completa
+                resultado = service.ejecutar_liquidacion_diaria(fecha=fecha, forzar=forzar)
+
+                # Mostrar resultado
+                self.stdout.write(f"Fecha: {resultado['fecha']} ({resultado['dia']})")
+
+                if resultado['exito']:
                     self.stdout.write(
-                        self.style.ERROR(f"✗ Error al enviar email: {str(e)}")
+                        self.style.SUCCESS(f"✓ {resultado['mensaje']}")
+                    )
+                    if resultado['registros_creados'] > 0:
+                        self.stdout.write(
+                            self.style.SUCCESS(
+                                f"✓ Registros insertados: {resultado['registros_creados']}"
+                            )
+                        )
+                else:
+                    self.stdout.write(
+                        self.style.WARNING(f"⚠ {resultado['mensaje']}")
                     )
 
-            elif not sin_email and not registros_generados:
-                self.stdout.write(
-                    self.style.WARNING('⚠ No se envió email (sin registros para reportar)')
-                )
+                # Enviar correo si hay registros y no se desactivó
+                if not sin_email and registros_generados:
+                    self.stdout.write(self.style.NOTICE('Enviando notificación por email...'))
 
-        except Exception as e:
-            self.stdout.write(
-                self.style.ERROR(f"✗ Error: {str(e)}")
-            )
-            raise
+                    try:
+                        email_service = EmailService()
+                        resultado_email = email_service.enviar_reporte_liquidacion(
+                            fecha=fecha,
+                            registros=registros_generados,
+                            resultado=resultado
+                        )
+
+                        if resultado_email['exito']:
+                            self.stdout.write(
+                                self.style.SUCCESS(f"✓ {resultado_email['mensaje']}")
+                            )
+                        else:
+                            self.stdout.write(
+                                self.style.ERROR(f"✗ {resultado_email['mensaje']}")
+                            )
+
+                    except Exception as e:
+                        self.stdout.write(
+                            self.style.ERROR(f"✗ Error al enviar email: {str(e)}")
+                        )
+
+                elif not sin_email and not registros_generados:
+                    self.stdout.write(
+                        self.style.WARNING('⚠ No se envió email (sin registros para reportar)')
+                    )
+
+            except Exception as e:
+                self.stdout.write(
+                    self.style.ERROR(f"✗ Error: {str(e)}")
+                )
 
         self.stdout.write('')
         self.stdout.write(self.style.NOTICE('='*60))
