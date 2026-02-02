@@ -69,6 +69,8 @@ def webhook_novedad_nomina(request):
         if not sede_param:
             sede_param = payload.get('sede', 'CALI').upper()
             
+        logger.info(f"Webhook recibido - Sede detectada: '{sede_param}' (desde GET: '{request.GET.get('sede')}', desde JSON: '{payload.get('sede')}')")
+
         # Conectar a Google Sheets
         service = GoogleSheetsService()
         sheet_id = obtener_id_hoja(sede_param)

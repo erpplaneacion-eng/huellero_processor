@@ -46,13 +46,17 @@ The project is configured to run in both local development and production (Railw
 
 ### Google Sheets
 The `tecnicos` app integrates with Google Sheets to read and write report data.
+- **Multi-Sede Architecture**: Managed via `apps.tecnicos.constantes.py`. 
+    - **Cali**: Uses `GOOGLE_SHEET_ID`.
+    - **Yumbo**: Uses `GOOGLE_SHEET_ID_YUMBO`.
 - **Service**: `apps.tecnicos.google_sheets.GoogleSheetsService`
-- **Mandatory IDs**: All automated records (Nómina Cali, Facturación) now include a unique ID (e.g., `NOM-YYYYMMDD-####`) to ensure data integrity and traceability.
-- **Header Management**: Use `init_sheets_headers.py` (root) to synchronize Google Sheets columns with the system's expected structure.
+- **Mandatory IDs**: All automated records (Nómina, Facturación) now include a unique ID (e.g., `NOM-YYYYMMDD-####`) to ensure data integrity and traceability.
+- **Header Management**: Use `init_sheets_headers.py` (root) to synchronize Google Sheets columns with the system's expected structure for all configured sedes.
 
 ### AppSheet Webhooks
 The system exposes webhooks to receive real-time updates from AppSheet applications.
 - **Endpoint**: `/supervision/api/webhook/novedad-nomina/`
+- **Dynamic Routing**: Supports a `?sede=YUMBO` query parameter to route novedades to the correct Google Spreadsheet.
 - **Function**: Receives updates when a "Novedad" is marked as "SI" in AppSheet.
 - **Security**: Protected by a shared secret token (`WEBHOOK_SECRET_TOKEN`).
 - **Action**: Automatically creates/updates the `novedades_cali` sheet in the connected Google Spreadsheet.
@@ -75,7 +79,8 @@ The system implements a triple-layer logic for daily shift assignment to handle 
 4.  **Saturday Rule**: Saturdays are always generated with empty hours by default, regardless of the assigned shift or rotation.
 
 ### Web Interface & Auditor Tool
-The **Nómina Cali** module (`/tecnicos/nomina-cali/`) has been transformed into a powerful audit and diagnosis dashboard:
+The **Nómina** module (`/tecnicos/nomina-cali/`) has been transformed into a powerful audit and diagnosis dashboard:
+- **Location Selector**: Users can switch between Cali and Yumbo views.
 - **Unified Monthly Data Map**: The backend fuses data from `nomina_cali`, `novedades_cali`, and `facturacion`. This creates a complete "Radiography" of the month for every employee.
 - **Monthly History Panel (Timeline)**: A new interactive section at the bottom of the page displays the full monthly history of a selected employee.
     - **Visual Grid**: A 31-day horizontal timeline showing Worked Days (Green), Novelties/Absences (Yellow), and Mixed status.

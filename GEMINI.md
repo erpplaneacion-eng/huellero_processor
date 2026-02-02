@@ -23,10 +23,11 @@ Located in the project root, this directory contains the business logic modules:
 ### Interfaces
 -   **CLI (`main.py`)**: Entry point for local execution. Direct invocation of `src` modules.
 -   **Web (`web/`)**: A Django project serving a UI.
+    -   **Multi-Sede Support**: The system now supports multiple locations (Cali and Yumbo). Configuration is managed via `web/apps/tecnicos/constantes.py` and differentiated by `GOOGLE_SHEET_ID` and `GOOGLE_SHEET_ID_YUMBO` environment variables.
     -   **`apps.logistica`**: Handles file uploads and calls `src` logic via `HuelleroProcessor`.
-    -   **`apps.tecnicos`**: Handles automated reports (Nómina Cali, Facturación) and AppSheet integrations.
-        -   Includes `webhooks.py` for external notifications.
-        -   Includes `cron.py` for scheduled automation.
+    -   **`apps.tecnicos`**: Handles automated reports (Nómina, Facturación) and AppSheet integrations for both sedes.
+        -   Includes `webhooks.py` for external notifications (supports `?sede=YUMBO` param).
+        -   Includes `cron.py` for scheduled automation (iterates over all configured sedes).
     -   **`apps.users`**: Manages authentication.
 
 ## Directory Structure
