@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from .google_sheets import GoogleSheetsService
+from .nomina_cali_service import NominaCaliService
 import logging
 from datetime import datetime
 from collections import defaultdict
@@ -74,6 +75,29 @@ def nomina_cali(request):
         service = GoogleSheetsService()
         sheet_id = obtener_id_hoja(filtro_ubicacion)
         libro = service.abrir_libro(sheet_id)
+
+        # ========== 0. OBTENER HORARIOS DE SEDE (NUEVO) ==========
+        horarios_map = {}
+        try:
+            # Usamos NominaCaliService para reutilizar su lógica de lectura de horarios
+            nomina_service = NominaCaliService(sede=filtro_ubicacion)
+            raw_horarios = nomina_service.obtener_horarios()
+            
+            # Aplanar horarios para visualización fácil: "A: 07:00 - 15:00 / B: ..."
+            for sede_nm, turnos in raw_horarios.items():
+                desc_turnos = []
+                for t in turnos:
+                    # Formato: "A: 07:00-15:00" o solo "07:00-15:00" si solo hay uno
+                    h_str = f"{t.get('hora_entrada', '')}-{t.get('hora_salida', '')}"
+                    if len(turnos) > 1:
+                        desc_turnos.append(f"{t.get('turno', '')}: {h_str}")
+                    else:
+                        desc_turnos.append(h_str)
+                
+                horarios_map[sede_nm] = " / ".join(desc_turnos)
+        except Exception as e:
+            logger.error(f"Error cargando horarios: {e}")
+
 
         # ========== 1. NOVEDADES DE NOMINA_CALI (NOVEDAD=SI) - AGRUPADAS ==========
         try:
@@ -203,6 +227,9 @@ def nomina_cali(request):
                     horas_mostrar = grupo['horas_totales']
                     if grupo['tipo_tiempo'].upper() in [t.upper() for t in TIPOS_SIN_HORAS]:
                         horas_mostrar = 0.0
+                    
+                    # Buscar horario oficial de la sede
+                    horario_oficial = horarios_map.get(grupo['descripcion_proyecto'].upper(), '')
 
                     context['novedades_nomina'].append({
                         'nombre': grupo['nombre'],
@@ -213,7 +240,8 @@ def nomina_cali(request):
                         'cantidad_dias': len(dias_ordenados),
                         'horas_totales': horas_mostrar,
                         'hora_inicial': grupo['hora_inicial'],
-                        'hora_final': grupo['hora_final']
+                        'hora_final': grupo['hora_final'],
+                        'horario_sede': horario_oficial
                     })
                 
                 # Ordenar alfabéticamente por nombre
@@ -287,9 +315,12 @@ def nomina_cali(request):
                         rango_fechas = f"{fecha_str} - {fecha_final_str}"
                     else:
                         rango_fechas = fecha_str
+                    
+                    sede_actual = str(fila[idx_sede] if idx_sede != -1 else '').strip()
+                    horario_oficial = horarios_map.get(sede_actual.upper(), '')
 
                     context['novedades_cali'].append({
-                        'sede': fila[idx_sede] if idx_sede != -1 else '',
+                        'sede': sede_actual,
                         'nombre': fila[idx_nombre] if idx_nombre != -1 else '',
                         'hora_inicial': fila[idx_h_ini] if idx_h_ini != -1 else '',
                         'hora_final': fila[idx_h_fin] if idx_h_fin != -1 else '',
@@ -297,7 +328,8 @@ def nomina_cali(request):
                         'fecha': fecha_str,
                         'rango_fechas': rango_fechas,
                         'tipo_tiempo': fila[idx_tipo] if idx_tipo != -1 and len(fila) > idx_tipo else '',
-                        'observaciones': fila[idx_observaciones] if idx_observaciones != -1 and len(fila) > idx_observaciones else ''
+                        'observaciones': fila[idx_observaciones] if idx_observaciones != -1 and len(fila) > idx_observaciones else '',
+                        'horario_sede': horario_oficial
                     })
                 
                 # Ordenar alfabéticamente por nombre

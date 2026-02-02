@@ -561,6 +561,7 @@
     padding: 0.75rem;
     margin-bottom: 0.75rem;
     transition: all 0.2s ease;
+    position: relative; /* Para posicionar absoluto el horario */
 }
 
 .novedad-card:hover {
@@ -580,6 +581,7 @@
     color: #333;
     margin-bottom: 0.25rem;
     font-size: 0.9rem;
+    padding-right: 70px; /* Espacio para el horario */
 }
 
 .novedad-card__sede {
@@ -647,10 +649,18 @@
     border-left-color: #17a2b8;
 }
 
-.novedad-card__horario {
-    font-size: 0.8rem;
+/* Horario en esquina superior derecha */
+.novedad-card__horario-top {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
     color: #495057;
-    margin-top: 0.35rem;
+    background: #e9ecef;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
 }
 
 /* Horas en cero (tipos sin horas: DIAS NO CLASE, etc.) */
