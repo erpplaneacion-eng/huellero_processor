@@ -183,7 +183,7 @@ class Calculator:
                 
                 # --- PARTE 2: 00:00 -> Salida ---
                 # Usar fecha del día siguiente
-                fecha_p2 = turno['salida'].date()
+                fecha_p2 = turno['entrada'].date() + timedelta(days=1)
                 fecha_str_p2 = fecha_p2.strftime(config.FORMATO_FECHA_OUTPUT)
                 dia_semana_p2 = config.DIAS_SEMANA[fecha_p2.weekday()]
                 
