@@ -140,6 +140,8 @@ class ExcelGenerator:
                 fill_color = None
                 if 'OK' in observacion or observacion == config.OBSERVACIONES['OK']:
                     fill_color = color_ok
+                elif observacion == config.OBSERVACIONES['SIN_REGISTROS']:
+                    fill_color = color_nocturno
                 elif 'TURNO_NOCTURNO' in observacion:
                     fill_color = color_nocturno
                 elif 'ALERTA' in observacion:

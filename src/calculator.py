@@ -223,6 +223,9 @@ class Calculator:
                 resultados.append(resultado)
         
         df_resultado = pd.DataFrame(resultados)
+
+        # Rellenar días faltantes
+        df_resultado = self.rellenar_dias_faltantes(df_resultado)
         
         # Ordenar por código y fecha
         df_resultado = df_resultado.sort_values(
@@ -232,6 +235,75 @@ class Calculator:
         logger.info(config.MENSAJES['calculo_completo'])
         logger.info(f"Total registros calculados: {len(df_resultado)}")
         
+        return df_resultado
+
+    def rellenar_dias_faltantes(self, df_resultado):
+        """
+        Rellena los días faltantes entre registros de un mismo empleado
+        
+        Args:
+            df_resultado: DataFrame con resultados actuales
+            
+        Returns:
+            DataFrame con días rellenados
+        """
+        if df_resultado.empty:
+            return df_resultado
+            
+        logger.info("Rellenando días faltantes...")
+        nuevos_registros = []
+        
+        # Convertir columna FECHA a datetime para cálculos
+        df_calc = df_resultado.copy()
+        df_calc['FECHA_DT'] = pd.to_datetime(df_calc['FECHA'], format=config.FORMATO_FECHA_OUTPUT)
+        
+        # Iterar por empleado
+        for codigo in df_calc['CODIGO COLABORADOR'].unique():
+            df_emp = df_calc[df_calc['CODIGO COLABORADOR'] == codigo].sort_values('FECHA_DT')
+            
+            if len(df_emp) < 2:
+                continue
+                
+            # Iterar pares de filas consecutivas
+            for i in range(len(df_emp) - 1):
+                fecha_actual = df_emp.iloc[i]['FECHA_DT']
+                fecha_siguiente = df_emp.iloc[i+1]['FECHA_DT']
+                
+                # Calcular diferencia en días
+                dias_diferencia = (fecha_siguiente - fecha_actual).days
+                
+                # Si hay hueco (diferencia > 1 día)
+                if dias_diferencia > 1:
+                    nombre_colaborador = df_emp.iloc[i]['NOMBRE COMPLETO DEL COLABORADOR']
+                    doc_colaborador = df_emp.iloc[i]['DOCUMENTO DEL COLABORADOR']
+                    
+                    # Generar registros intermedios
+                    for d in range(1, dias_diferencia):
+                        fecha_relleno = fecha_actual + timedelta(days=d)
+                        fecha_relleno_str = fecha_relleno.strftime(config.FORMATO_FECHA_OUTPUT)
+                        dia_semana_relleno = config.DIAS_SEMANA[fecha_relleno.weekday()]
+                        
+                        nuevo_reg = {
+                            'CODIGO COLABORADOR': int(codigo),
+                            'NOMBRE COMPLETO DEL COLABORADOR': nombre_colaborador,
+                            'DOCUMENTO DEL COLABORADOR': doc_colaborador,
+                            'FECHA': fecha_relleno_str,
+                            'DIA': dia_semana_relleno,
+                            '# MARCACIONES AM': '',
+                            '# MARCACIONES PM': '',
+                            'HORA DE INGRESO': '',
+                            'HORA DE SALIDA': '',
+                            'TOTAL HORAS LABORADAS': '',
+                            'OBSERVACION': config.OBSERVACIONES['SIN_REGISTROS']
+                        }
+                        nuevos_registros.append(nuevo_reg)
+                        
+        if nuevos_registros:
+            df_nuevos = pd.DataFrame(nuevos_registros)
+            df_final = pd.concat([df_resultado, df_nuevos], ignore_index=True)
+            logger.info(f"✅ Se generaron {len(nuevos_registros)} registros de relleno")
+            return df_final
+            
         return df_resultado
     
     def agregar_datos_maestro(self, df_resultado, ruta_maestro):

@@ -74,7 +74,8 @@ OBSERVACIONES = {
     'REQUIERE_REVISION': 'Requiere revisión manual',
     'SIN_MARCACIONES': 'Sin marcaciones registradas',
     'SALIDA_CORREGIDA': 'Marcación de salida corregida - empleado registró Entrada en lugar de Salida',
-    'NOCTURNO_PROSPECTIVO': 'Turno nocturno detectado por entrada PM y salida AM del día siguiente'
+    'NOCTURNO_PROSPECTIVO': 'Turno nocturno detectado por entrada PM y salida AM del día siguiente',
+    'SIN_REGISTROS': 'SIN REGISTROS'
 }
 
 # ========== CONFIGURACIÓN DE COLUMNAS EXCEL ==========
