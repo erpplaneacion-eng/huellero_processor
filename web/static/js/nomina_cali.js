@@ -214,37 +214,108 @@ function buscarYMostrarColaborador(nombre) {
     }
 }
 
-function mostrarDetalle(cedula) {
-    const data = asistenciaData[cedula];
-    if (!data) return;
+function mostrarDetalle(cedulaTarget) {
+    const dataTarget = asistenciaData[cedulaTarget];
+    if (!dataTarget) return;
 
-    // Llenar cabecera
-    document.getElementById('detalleNombre').textContent = data.nombre;
-    document.getElementById('detalleSede').textContent = data.sede;
-    document.getElementById('detalleCedula').textContent = 'CC: ' + cedula;
+    const sedeTarget = dataTarget.sede;
+    let equipo = [];
 
-    // Llenar stats
-    document.getElementById('statDiasTrab').textContent = data.resumen.dias_trabajados;
-    document.getElementById('statHoras').textContent = data.resumen.total_horas.toFixed(2);
-    document.getElementById('statNovedades').textContent = data.resumen.dias_novedad;
+    // 1. Filtrar equipo por Sede
+    // Si tiene sede, buscar todos los de esa sede. Si no, solo mostrar al individuo.
+    if (sedeTarget) {
+        equipo = Object.values(asistenciaData).filter(emp => emp.sede === sedeTarget);
+    } else {
+        equipo = [dataTarget];
+    }
 
-    // Llenar timeline
-    const timelineContainer = document.querySelector('.detalle-timeline');
-    timelineContainer.innerHTML = '';
+    // 2. Ordenar: El seleccionado primero, luego alfabéticamente
+    equipo.sort((a, b) => {
+        // Si 'a' es el objeto target, ponerlo primero (-1)
+        if (a === dataTarget) return -1;
+        if (b === dataTarget) return 1;
+        // Orden alfabético por nombre
+        return (a.nombre || '').localeCompare(b.nombre || '');
+    });
 
-    // Ordenar registros por día
-    const registrosOrdenados = data.registros.sort((a, b) => parseInt(a.dia) - parseInt(b.dia));
+    // 3. Actualizar Cabecera del Panel
+    const tituloSede = sedeTarget ? `Sede: ${sedeTarget}` : 'Sin Sede Asignada';
+    const countText = `${equipo.length} Colaborador${equipo.length !== 1 ? 'es' : ''}`;
+    
+    // Elementos del DOM (asegurarse de que existan en el HTML actualizado)
+    const elTitulo = document.getElementById('detalleSedeTitle');
+    const elCount = document.getElementById('detalleCount');
+    
+    if (elTitulo) elTitulo.textContent = tituloSede;
+    if (elCount) elCount.textContent = countText;
 
-    // Crear mapa de días para llenado rápido
+    // 4. Generar la Lista de Filas
+    const container = document.getElementById('detalleTeamList');
+    if (!container) return;
+    
+    container.innerHTML = '';
+
+    equipo.forEach(miembro => {
+        const isSelected = (miembro === dataTarget);
+        const row = document.createElement('div');
+        row.className = `team-member-row ${isSelected ? 'team-member-row--selected' : ''}`;
+        
+        // Datos de resumen
+        const diasTrab = miembro.resumen.dias_trabajados;
+        const totalHoras = miembro.resumen.total_horas.toFixed(1); // 1 decimal es suficiente
+        const diasNov = miembro.resumen.dias_novedad;
+        const cedulaStr = miembro.cedula ? `CC: ${miembro.cedula}` : '';
+
+        // Generar HTML de la línea de tiempo
+        const timelineHTML = generarHTMLTimeline(miembro.registros);
+
+        row.innerHTML = `
+            <div class="member-info">
+                <div>
+                    <span class="member-name">${miembro.nombre}</span>
+                    <span class="member-cedula">${cedulaStr}</span>
+                </div>
+                <div class="member-stats">
+                    <span class="stat-tag">Trab: <strong>${diasTrab}d</strong></span>
+                    <span class="stat-tag">Horas: <strong>${totalHoras}h</strong></span>
+                    ${diasNov > 0 ? `<span class="stat-tag" style="color:#856404; background:#fff3cd;">Nov: <strong>${diasNov}d</strong></span>` : ''}
+                </div>
+            </div>
+            <div class="detalle-timeline">
+                ${timelineHTML}
+            </div>
+        `;
+        
+        container.appendChild(row);
+    });
+
+    // 5. Mostrar Panel y Scroll
+    const panel = document.getElementById('detalleManipuladora');
+    panel.style.display = 'block';
+    // Scroll suave hacia el panel
+    panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/**
+ * Genera el HTML de la barra de tiempo (1-31 días) para un colaborador
+ */
+function generarHTMLTimeline(registros) {
+    // Crear mapa de días para acceso rápido: { 1: registro, 5: registro... }
     const diasMap = {};
-    registrosOrdenados.forEach(r => diasMap[parseInt(r.dia)] = r);
-
-    // Generar 31 días (o los del mes actual)
+    if (registros) {
+        registros.forEach(r => {
+            const diaNum = parseInt(r.dia);
+            if (!isNaN(diaNum)) {
+                diasMap[diaNum] = r;
+            }
+        });
+    }
+    
+    let html = '';
+    
+    // Generar casillas del 1 al 31
     for (let i = 1; i <= 31; i++) {
         const registro = diasMap[i];
-        const diaDiv = document.createElement('div');
-        diaDiv.className = 'timeline-dia';
-
         let casillaClase = 'timeline-dia__casilla';
         let contenido = '-';
         let titulo = `Día ${i}: Sin registro`;
@@ -254,37 +325,35 @@ function mostrarDetalle(cedula) {
             const tieneNovedad = registro.novedad === 'SI';
 
             if (tieneHoras && tieneNovedad) {
-                // CASO MIXTO: Trabajó horas pero también tiene novedad (ej: accidente ese día)
+                // CASO MIXTO: Trabajó horas pero también tiene novedad
                 casillaClase += ' timeline-dia__casilla--mixto';
                 contenido = registro.horas + '⚠️';
                 titulo = `${registro.fecha}\nHoras: ${registro.horas}\nNovedad: ${registro.tipo}`;
             } else if (tieneNovedad) {
-                // Solo novedad, sin horas (ej: incapacidad completa)
+                // Solo novedad
                 casillaClase += ' timeline-dia__casilla--novedad';
                 contenido = '⚠️';
                 titulo = `${registro.fecha}\nNovedad: ${registro.tipo}`;
             } else if (tieneHoras) {
-                // Turno normal con horas
+                // Turno normal
                 casillaClase += ' timeline-dia__casilla--trabajado';
-                contenido = registro.horas;
+                contenido = registro.horas; // Mostrar horas
                 titulo = `${registro.fecha}\nHoras: ${registro.horas}\nTurno Normal`;
             } else {
+                // Registro sin horas (ej: descanso o error)
                 contenido = '0';
-                titulo = `${registro.fecha}\nRegistro sin horas`;
+                titulo = `${registro.fecha}\nRegistro sin horas calculadas`;
             }
         }
 
-        diaDiv.innerHTML = `
-            <div class="${casillaClase}" title="${titulo}">${contenido}</div>
-            <span class="timeline-dia__fecha">${i}</span>
+        html += `
+            <div class="timeline-dia">
+                <div class="${casillaClase}" title="${titulo}">${contenido}</div>
+                <span class="timeline-dia__fecha">${i}</span>
+            </div>
         `;
-        timelineContainer.appendChild(diaDiv);
     }
-
-    // Mostrar panel con animación
-    const panel = document.getElementById('detalleManipuladora');
-    panel.style.display = 'block';
-    panel.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return html;
 }
 
 function cerrarDetalle() {

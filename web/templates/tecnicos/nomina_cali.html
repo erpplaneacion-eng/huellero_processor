@@ -246,29 +246,13 @@
     <div id="detalleManipuladora" class="detalle-section" style="display: none;">
         <div class="detalle-header">
             <div class="detalle-info">
-                <h3 id="detalleNombre">Nombre Colaborador</h3>
-                <span id="detalleSede" class="detalle-sede">Sede</span>
-                <span id="detalleCedula" class="detalle-cedula">CC: </span>
+                <h3 id="detalleSedeTitle">Sede: ...</h3>
+                <span id="detalleCount" class="detalle-sede">0 Colaboradores</span>
             </div>
             <button class="btn-close-detalle" onclick="cerrarDetalle()">✖</button>
         </div>
         
-        <div class="detalle-stats">
-            <div class="stat-card">
-                <span class="stat-label">Días Trabajados</span>
-                <span id="statDiasTrab" class="stat-value">0</span>
-            </div>
-            <div class="stat-card">
-                <span class="stat-label">Total Horas</span>
-                <span id="statHoras" class="stat-value">0</span>
-            </div>
-            <div class="stat-card stat-card--warning">
-                <span class="stat-label">Días Novedad</span>
-                <span id="statNovedades" class="stat-value">0</span>
-            </div>
-        </div>
-
-        <div class="detalle-timeline">
+        <div id="detalleTeamList" class="team-list">
             <!-- Se llena dinámicamente con JS -->
         </div>
     </div>
