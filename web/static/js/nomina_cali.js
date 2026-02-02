@@ -298,70 +298,98 @@ function mostrarDetalle(cedulaTarget) {
 
 /**
  * Genera el HTML de la barra de tiempo (1-31 días) para un colaborador
+ * Fusiona registros si hay duplicados en el mismo día (nómina + novedad)
  */
 function generarHTMLTimeline(registros) {
-    // Crear mapa de días para acceso rápido: { 1: registro, 5: registro... }
-    const diasMap = {};
+    // 1. Fusionar registros por día
+    const diasMap = {}; // { 1: {horas: 5.5, novedad: 'SI', tipos: []} }
+
     if (registros) {
         registros.forEach(r => {
             const diaNum = parseInt(r.dia);
-            if (!isNaN(diaNum)) {
-                diasMap[diaNum] = r;
+            if (isNaN(diaNum)) return;
+
+            if (!diasMap[diaNum]) {
+                diasMap[diaNum] = {
+                    fecha: r.fecha,
+                    horas: 0,
+                    tieneNovedad: false,
+                    tipos: new Set()
+                };
+            }
+
+            const diaObj = diasMap[diaNum];
+
+            // Calcular horas dinámicas para este registro
+            let horasCalc = 0;
+            if (r.hora_ini && r.hora_fin) {
+                const diff = calcularDiferenciaHoras(r.hora_ini, r.hora_fin);
+                if (diff !== null) horasCalc = diff;
+            } else {
+                // Fallback a las horas estáticas si no hay horas inicio/fin
+                horasCalc = parseFloat(r.horas) || 0;
+            }
+
+            // Aplicar regla TIPOS_SIN_HORAS
+            const tipoUpper = (r.tipo || '').toUpperCase();
+            if (TIPOS_SIN_HORAS.some(t => tipoUpper.includes(t))) {
+                horasCalc = 0;
+            }
+
+            // Actualizar horas del día fusionado
+            // Prioridad: Si ya tenía horas, nos quedamos con el máximo (asumiendo que uno es el turno y otro tal vez 0)
+            // O sumamos? Usualmente es un solo turno real. Max es más seguro para evitar duplicar si viene de dos fuentes
+            diaObj.horas = Math.max(diaObj.horas, horasCalc);
+
+            // Actualizar estado de novedad
+            if (r.novedad === 'SI') {
+                diaObj.tieneNovedad = true;
+            }
+
+            // Agregar tipo
+            if (r.tipo) {
+                diaObj.tipos.add(r.tipo);
             }
         });
     }
     
     let html = '';
     
-    // Generar casillas del 1 al 31
+    // 2. Generar casillas del 1 al 31
     for (let i = 1; i <= 31; i++) {
-        const registro = diasMap[i];
+        const diaDatos = diasMap[i];
         let casillaClase = 'timeline-dia__casilla';
         let contenido = '-';
         let titulo = `Día ${i}: Sin registro`;
 
-        if (registro) {
-            const tieneHoras = registro.horas > 0;
-            const tieneNovedad = registro.novedad === 'SI';
-
-            // Cálculo dinámico de horas para visualización (si hay horas raw)
-            let horasMostrar = registro.horas;
-
-            if (registro.hora_ini && registro.hora_fin) {
-                const horasCalc = calcularDiferenciaHoras(registro.hora_ini, registro.hora_fin);
-                if (horasCalc !== null) {
-                    horasMostrar = horasCalc.toFixed(1);
-                    
-                    // Aplicar regla TIPOS_SIN_HORAS
-                    const tipo = (registro.tipo || '').toUpperCase();
-                    if (TIPOS_SIN_HORAS.some(t => tipo.includes(t))) {
-                        horasMostrar = 0;
-                    }
-                }
-            }
+        if (diaDatos) {
+            const horasVal = diaDatos.horas;
+            const tieneNovedad = diaDatos.tieneNovedad;
+            const tiposStr = Array.from(diaDatos.tipos).join(', ');
             
-            // Si horasMostrar quedó en 0 o similar, formatear para quitar decimales innecesarios
-            if (horasMostrar == 0) horasMostrar = '0';
+            // Formatear horas para mostrar (sin .0 si es entero)
+            let horasTxt = horasVal % 1 === 0 ? horasVal.toFixed(0) : horasVal.toFixed(1);
 
-            if (tieneHoras && tieneNovedad) {
+            if (horasVal > 0 && tieneNovedad) {
                 // CASO MIXTO: Trabajó horas pero también tiene novedad
                 casillaClase += ' timeline-dia__casilla--mixto';
-                contenido = horasMostrar + '⚠️';
-                titulo = `${registro.fecha}\nHoras: ${horasMostrar}\nNovedad: ${registro.tipo}`;
+                // Mostrar horas y alerta pequeña
+                contenido = `${horasTxt}<span style="font-size:0.5em; vertical-align: top;">⚠️</span>`;
+                titulo = `${diaDatos.fecha}\nHoras: ${horasTxt}\nNovedad: ${tiposStr}`;
             } else if (tieneNovedad) {
-                // Solo novedad
+                // Solo novedad (Horas = 0)
                 casillaClase += ' timeline-dia__casilla--novedad';
                 contenido = '⚠️';
-                titulo = `${registro.fecha}\nNovedad: ${registro.tipo}`;
-            } else if (tieneHoras) {
+                titulo = `${diaDatos.fecha}\nNovedad: ${tiposStr}`;
+            } else if (horasVal > 0) {
                 // Turno normal
                 casillaClase += ' timeline-dia__casilla--trabajado';
-                contenido = horasMostrar; 
-                titulo = `${registro.fecha}\nHoras: ${horasMostrar}\nTurno Normal`;
+                contenido = horasTxt; 
+                titulo = `${diaDatos.fecha}\nHoras: ${horasTxt}\nTurno Normal`;
             } else {
                 // Registro sin horas (ej: descanso o error)
                 contenido = '0';
-                titulo = `${registro.fecha}\nRegistro sin horas calculadas`;
+                titulo = `${diaDatos.fecha}\nRegistro sin horas calculadas`;
             }
         }
 
