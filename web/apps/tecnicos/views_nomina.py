@@ -375,10 +375,17 @@ def nomina_cali(request):
             idx_horas = headers_d.get('TOTALHORAS', -1) # Nomina y Novedades
             idx_novedad = headers_d.get('NOVEDAD', -1)
             idx_tipo = headers_d.get('TIPOTIEMPOLABORADO', -1)
+            
+            # Horas Inicio/Fin para cálculo dinámico
+            idx_h_ini = headers_d.get('HORAINICIAL', -1)
+            idx_h_fin = headers_d.get('HORAFINAL', -1)
 
             for fila in datos[1:]:
                 # Obtener clave única (Cédula o Nombre Limpio)
-                cedula = str(fila[idx_ced]).strip() if idx_ced != -1 and len(fila) > idx_ced else ''
+                cedula_raw = str(fila[idx_ced]).strip() if idx_ced != -1 and len(fila) > idx_ced else ''
+                # Normalizar cédula para evitar duplicados (quitar puntos, comas, espacios)
+                cedula = cedula_raw.replace('.', '').replace(',', '').replace(' ', '')
+                
                 nombre = str(fila[idx_nom]).strip() if idx_nom != -1 and len(fila) > idx_nom else ''
                 
                 if not cedula and not nombre: continue
@@ -394,12 +401,16 @@ def nomina_cali(request):
                 # Datos básicos
                 sede = str(fila[idx_sede]).strip() if idx_sede != -1 and len(fila) > idx_sede else ''
                 
-                # Datos numéricos
+                # Datos numéricos (Horas ya calculadas en hoja)
                 horas = 0.0
                 if idx_horas != -1 and len(fila) > idx_horas:
                     h_val = str(fila[idx_horas])
                     # Si viene con formato HH:MM (Nómina) o Decimal (Novedades)
                     horas = _parsear_horas_formato(h_val)
+
+                # Obtener horas crudas para recálculo dinámico en frontend
+                h_ini = str(fila[idx_h_ini]).strip() if idx_h_ini != -1 and len(fila) > idx_h_ini else ''
+                h_fin = str(fila[idx_h_fin]).strip() if idx_h_fin != -1 and len(fila) > idx_h_fin else ''
 
                 # Novedad
                 novedad_val = 'NO'
@@ -422,7 +433,7 @@ def nomina_cali(request):
                 # Actualizar Mapa Maestro
                 obj = asistencia_map[clave]
                 if not obj['nombre'] and nombre: obj['nombre'] = nombre
-                if not obj['cedula'] and cedula: obj['cedula'] = cedula
+                if not obj['cedula'] and cedula_raw: obj['cedula'] = cedula_raw # Guardar la visual (con puntos si venía así)
                 if not obj['sede'] and sede: obj['sede'] = sede
 
                 # Evitar duplicados exactos de fecha si ya existen (prioridad Nomina > Novedades > Facturacion)
@@ -432,6 +443,8 @@ def nomina_cali(request):
                     'fecha': fecha_str,
                     'dia': int(dia),
                     'horas': horas,
+                    'hora_ini': h_ini,
+                    'hora_fin': h_fin,
                     'novedad': novedad_val,
                     'tipo': tipo_val
                 })

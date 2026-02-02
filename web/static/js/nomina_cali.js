@@ -324,11 +324,30 @@ function generarHTMLTimeline(registros) {
             const tieneHoras = registro.horas > 0;
             const tieneNovedad = registro.novedad === 'SI';
 
+            // Cálculo dinámico de horas para visualización (si hay horas raw)
+            let horasMostrar = registro.horas;
+
+            if (registro.hora_ini && registro.hora_fin) {
+                const horasCalc = calcularDiferenciaHoras(registro.hora_ini, registro.hora_fin);
+                if (horasCalc !== null) {
+                    horasMostrar = horasCalc.toFixed(1);
+                    
+                    // Aplicar regla TIPOS_SIN_HORAS
+                    const tipo = (registro.tipo || '').toUpperCase();
+                    if (TIPOS_SIN_HORAS.some(t => tipo.includes(t))) {
+                        horasMostrar = 0;
+                    }
+                }
+            }
+            
+            // Si horasMostrar quedó en 0 o similar, formatear para quitar decimales innecesarios
+            if (horasMostrar == 0) horasMostrar = '0';
+
             if (tieneHoras && tieneNovedad) {
                 // CASO MIXTO: Trabajó horas pero también tiene novedad
                 casillaClase += ' timeline-dia__casilla--mixto';
-                contenido = registro.horas + '⚠️';
-                titulo = `${registro.fecha}\nHoras: ${registro.horas}\nNovedad: ${registro.tipo}`;
+                contenido = horasMostrar + '⚠️';
+                titulo = `${registro.fecha}\nHoras: ${horasMostrar}\nNovedad: ${registro.tipo}`;
             } else if (tieneNovedad) {
                 // Solo novedad
                 casillaClase += ' timeline-dia__casilla--novedad';
@@ -337,8 +356,8 @@ function generarHTMLTimeline(registros) {
             } else if (tieneHoras) {
                 // Turno normal
                 casillaClase += ' timeline-dia__casilla--trabajado';
-                contenido = registro.horas; // Mostrar horas
-                titulo = `${registro.fecha}\nHoras: ${registro.horas}\nTurno Normal`;
+                contenido = horasMostrar; 
+                titulo = `${registro.fecha}\nHoras: ${horasMostrar}\nTurno Normal`;
             } else {
                 // Registro sin horas (ej: descanso o error)
                 contenido = '0';
