@@ -26,7 +26,10 @@ Located in the project root, this directory contains the business logic modules:
     -   **Multi-Sede Support**: The system now supports multiple locations (Cali and Yumbo). Configuration is managed via `web/apps/tecnicos/constantes.py` and differentiated by `GOOGLE_SHEET_ID` and `GOOGLE_SHEET_ID_YUMBO` environment variables.
     -   **`apps.logistica`**: Handles file uploads and calls `src` logic via `HuelleroProcessor`.
     -   **`apps.tecnicos`**: Handles automated reports (Nómina, Facturación) and AppSheet integrations for both sedes.
-        -   Includes `webhooks.py` for external notifications (supports `?sede=YUMBO` param).
+        -   Includes **Auditor Tool**: A diagnosis dashboard with alphabetical sorting, cross-column highlighting, and Sede-based team views for comparative staffing analysis.
+        -   Includes **Dynamic Stats**: Real-time frontend recalculation of hours and worked days for 100% visual consistency.
+        -   Includes **Schedule Reference**: Displays official sede schedules (from HORARIOS sheet) alongside novelty reports.
+        -   Includes `webhooks.py` for external notifications.
         -   Includes `cron.py` for scheduled automation (iterates over all configured sedes).
     -   **`apps.users`**: Manages authentication.
 

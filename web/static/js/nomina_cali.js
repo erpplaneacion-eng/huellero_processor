@@ -47,7 +47,7 @@ function initHoverEffects() {
             // Normalizar nombre para búsqueda (opcional, pero data-nombre ya viene del backend)
             // Buscar todas las tarjetas con el mismo nombre exacto en el atributo data-nombre
             // Usamos comillas dobles escapadas en el selector por si el nombre tiene comillas simples
-            const selector = `.novedad-card[data-nombre="${nombre.replace(/"/g, '\"')}"]`;
+            const selector = `.novedad-card[data-nombre="${nombre.replace(/"/g, '"')}"]`;
             
             document.querySelectorAll(selector).forEach(match => {
                 match.classList.add('highlight');
@@ -58,7 +58,7 @@ function initHoverEffects() {
             const nombre = this.dataset.nombre;
             if (!nombre) return;
             
-            const selector = `.novedad-card[data-nombre="${nombre.replace(/"/g, '\"')}"]`;
+            const selector = `.novedad-card[data-nombre="${nombre.replace(/"/g, '"')}"]`;
             
             document.querySelectorAll(selector).forEach(match => {
                 match.classList.remove('highlight');
@@ -261,15 +261,15 @@ function mostrarDetalle(cedulaTarget) {
         row.className = `team-member-row ${isSelected ? 'team-member-row--selected' : ''}`;
         
         // Generar HTML de la línea de tiempo y calcular horas reales dinámicamente
-        // Llamamos a generarHTMLTimeline que retorna un objeto { html, totalHoras }
+        // Llamamos a generarHTMLTimeline que retorna un objeto { html, totalHoras, diasTrabajados }
         const timelineData = generarHTMLTimeline(miembro.registros);
         const timelineHTML = timelineData.html;
         
-        // Usar el total calculado dinámicamente en lugar del backend
+        // Usar los totales calculados dinámicamente
         const totalHorasCalculadas = timelineData.totalHoras.toFixed(1);
+        const diasTrabCalculados = timelineData.diasTrabajados;
 
-        // Datos de resumen (Días tomados del backend, horas del recálculo local)
-        const diasTrab = miembro.resumen.dias_trabajados;
+        // Datos de resumen
         const diasNov = miembro.resumen.dias_novedad;
         const cedulaStr = miembro.cedula ? `CC: ${miembro.cedula}` : '';
 
@@ -280,7 +280,7 @@ function mostrarDetalle(cedulaTarget) {
                     <span class="member-cedula">${cedulaStr}</span>
                 </div>
                 <div class="member-stats">
-                    <span class="stat-tag">Trab: <strong>${diasTrab}d</strong></span>
+                    <span class="stat-tag">Trab: <strong>${diasTrabCalculados}d</strong></span>
                     <span class="stat-tag">Horas: <strong>${totalHorasCalculadas}h</strong></span>
                     ${diasNov > 0 ? `<span class="stat-tag" style="color:#856404; background:#fff3cd;">Nov: <strong>${diasNov}d</strong></span>` : ''}
                 </div>
@@ -303,7 +303,7 @@ function mostrarDetalle(cedulaTarget) {
 /**
  * Genera el HTML de la barra de tiempo (1-31 días) para un colaborador
  * Fusiona registros si hay duplicados en el mismo día (nómina + novedad)
- * Retorna objeto { html, totalHoras }
+ * Retorna objeto { html, totalHoras, diasTrabajados }
  */
 function generarHTMLTimeline(registros) {
     // 1. Fusionar registros por día
@@ -343,6 +343,7 @@ function generarHTMLTimeline(registros) {
 
             // Actualizar horas del día fusionado
             // Prioridad: Si ya tenía horas, nos quedamos con el máximo (asumiendo que uno es el turno y otro tal vez 0)
+            // O sumamos? Usualmente es un solo turno real. Max es más seguro para evitar duplicar si viene de dos fuentes
             diaObj.horas = Math.max(diaObj.horas, horasCalc);
 
             // Actualizar estado de novedad
@@ -359,6 +360,7 @@ function generarHTMLTimeline(registros) {
     
     let html = '';
     let totalHorasPeriodo = 0;
+    let totalDiasTrabajados = 0;
     
     // 2. Generar casillas del 1 al 31
     for (let i = 1; i <= 31; i++) {
@@ -375,6 +377,7 @@ function generarHTMLTimeline(registros) {
             // Sumar al total del periodo si hay horas trabajadas
             if (horasVal > 0) {
                 totalHorasPeriodo += horasVal;
+                totalDiasTrabajados++; // Contar día trabajado
             }
             
             // Formatear horas para mostrar (sin .0 si es entero)
@@ -413,7 +416,8 @@ function generarHTMLTimeline(registros) {
     
     return {
         html: html,
-        totalHoras: totalHorasPeriodo
+        totalHoras: totalHorasPeriodo,
+        diasTrabajados: totalDiasTrabajados
     };
 }
 

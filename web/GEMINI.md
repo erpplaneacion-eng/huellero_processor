@@ -82,10 +82,23 @@ The system implements a triple-layer logic for daily shift assignment to handle 
 The **Nómina** module (`/tecnicos/nomina-cali/`) has been transformed into a powerful audit and diagnosis dashboard:
 - **Location Selector**: Users can switch between Cali and Yumbo views.
 - **Unified Monthly Data Map**: The backend fuses data from `nomina_cali`, `novedades_cali`, and `facturacion`. This creates a complete "Radiography" of the month for every employee.
-- **Monthly History Panel (Timeline)**: A new interactive section at the bottom of the page displays the full monthly history of a selected employee.
-    - **Visual Grid**: A 31-day horizontal timeline showing Worked Days (Green), Novelties/Absences (Yellow), and Mixed status.
-    - **One-Click Audit**: Clicking on any name in the novelty lists instantly populates the timeline, allowing coordinators to verify if reported novelties from AppSheet have been correctly reflected in the payroll records.
-    - **Aggregated Stats**: Instant calculation of total hours worked and total days of novelty for the current month.
+- **Alphabetical Sorting**: All employee lists are automatically sorted by name for easier navigation.
+- **Cross-Column Highlighting**: Hovering over an employee card in one column automatically highlights the corresponding card in the other column, facilitating side-by-side comparison.
+- **Sede-Based Team View**: Clicking on an employee name opens a comprehensive team panel.
+    - **Contextual View**: Instead of just one person, it displays the full team belonging to that same Sede.
+    - **Comparative Timelines**: Multiple horizontal timelines allow coordinators to compare shifts and novelties across the entire local staff simultaneously.
+- **One-Click Audit**: Clicking on any name in the novelty lists instantly populates the team timeline, allowing coordinators to verify if reported novelties from AppSheet have been correctly reflected in the payroll records.
+- **Dynamic Accuracy Engine**: Total hours and Worked Days are recalculated in real-time by the frontend, ensuring the "Stats Badges" are 100% consistent with the visual timeline blocks.
+- **Schedule Cross-Reference**: Novelty cards display the **Official Sede Schedule** (from the HORARIOS sheet) in the top-right corner, allowing immediate contrast with the reported novelty hours at the bottom.
+
+### Web Interface Improvements (Audit & Traceability)
+The **Nómina Cali** module (`/tecnicos/nomina-cali/`) has been upgraded to serve as a comprehensive audit tool:
+- **Unified Data Map**: The backend now fuses data from three sources (`nomina_cali`, `novedades_cali`, `facturacion`) into a single Master JSON object injected into the frontend. 
+- **Normalization Layer**: Strict normalization of Cédulas (stripping dots, commas, and spaces) ensures that records from different sheets are perfectly merged into a single employee profile.
+- **Interactive Detail Panel**: A new bottom section allows coordinators to click on any employee name to reveal their full monthly history within their team context.
+    - **Visual Timeline**: A compact, 31-day horizontal grid showing Worked Days (Green), Novelties (Yellow), and Mixed status (Blue with ⚠️ icon).
+    - **Compact Design**: Optimized vertical space with low-height bars (18px) and zoom-on-hover for maximum information density without scrolling.
+- **Goal**: To transform the view from a simple list into a traceability tool, allowing coordinators to instantly verify if an AppSheet report has been correctly processed into the daily payroll records and how it affects the sede's overall staffing.
 
 ## Setup & Usage
 
