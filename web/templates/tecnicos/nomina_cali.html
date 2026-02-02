@@ -101,7 +101,7 @@
 
             {% if novedades_nomina %}
                 {% for nov in novedades_nomina %}
-                <div class="novedad-card">
+                <div class="novedad-card" data-nombre="{{ nov.nombre }}">
                     <div class="novedad-card__nombre">{{ nov.nombre }}</div>
                     <div class="novedad-card__sede">📍 {{ nov.descripcion_proyecto }}</div>
                     <div class="novedad-card__detalle">
@@ -212,7 +212,7 @@
 
             {% if novedades_cali %}
                 {% for nov in novedades_cali %}
-                <div class="novedad-card novedad-card--appsheet">
+                <div class="novedad-card novedad-card--appsheet" data-nombre="{{ nov.nombre }}">
                     <div class="novedad-card__nombre">{{ nov.nombre }}</div>
                     <div class="novedad-card__sede">📍 {{ nov.sede }}</div>
                     <div class="novedad-card__detalle">

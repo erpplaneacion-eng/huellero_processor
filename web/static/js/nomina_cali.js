@@ -28,7 +28,44 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 4. Calcular horas dinámicamente en las tarjetas
     calcularHorasTarjetas();
+    
+    // 5. Inicializar efectos de hover cruzado
+    initHoverEffects();
 });
+
+/**
+ * Inicializa el resaltado cruzado entre columnas al pasar el mouse
+ */
+function initHoverEffects() {
+    const cards = document.querySelectorAll('.novedad-card');
+    
+    cards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            const nombre = this.dataset.nombre;
+            if (!nombre) return;
+            
+            // Normalizar nombre para búsqueda (opcional, pero data-nombre ya viene del backend)
+            // Buscar todas las tarjetas con el mismo nombre exacto en el atributo data-nombre
+            // Usamos comillas dobles escapadas en el selector por si el nombre tiene comillas simples
+            const selector = `.novedad-card[data-nombre="${nombre.replace(/"/g, '\\"')}"]`;
+            
+            document.querySelectorAll(selector).forEach(match => {
+                match.classList.add('highlight');
+            });
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            const nombre = this.dataset.nombre;
+            if (!nombre) return;
+            
+            const selector = `.novedad-card[data-nombre="${nombre.replace(/"/g, '\\"')}"]`;
+            
+            document.querySelectorAll(selector).forEach(match => {
+                match.classList.remove('highlight');
+            });
+        });
+    });
+}
 
 /**
  * Tipos de tiempo que deben mostrar 0 horas (solo aplica a columna izquierda)

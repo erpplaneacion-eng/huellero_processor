@@ -215,6 +215,9 @@ def nomina_cali(request):
                         'hora_inicial': grupo['hora_inicial'],
                         'hora_final': grupo['hora_final']
                     })
+                
+                # Ordenar alfabéticamente por nombre
+                context['novedades_nomina'].sort(key=lambda x: x['nombre'])
 
         except Exception as e:
             logger.error(f"Error leyendo nomina_cali: {e}")
@@ -296,6 +299,9 @@ def nomina_cali(request):
                         'tipo_tiempo': fila[idx_tipo] if idx_tipo != -1 and len(fila) > idx_tipo else '',
                         'observaciones': fila[idx_observaciones] if idx_observaciones != -1 and len(fila) > idx_observaciones else ''
                     })
+                
+                # Ordenar alfabéticamente por nombre
+                context['novedades_cali'].sort(key=lambda x: x['nombre'])
         except Exception as e:
             logger.error(f"Error leyendo novedades_cali: {e}")
 

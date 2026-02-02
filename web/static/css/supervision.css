@@ -568,6 +568,13 @@
     transform: translateX(2px);
 }
 
+.novedad-card.highlight {
+    border-color: #2c5aa0;
+    box-shadow: 0 0 10px rgba(44, 90, 160, 0.3);
+    background-color: #e7f1ff;
+    transform: scale(1.02);
+}
+
 .novedad-card__nombre {
     font-weight: 600;
     color: #333;
