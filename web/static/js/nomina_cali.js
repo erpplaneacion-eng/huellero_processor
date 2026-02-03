@@ -387,7 +387,7 @@ function generarHTMLTimeline(registros) {
                 // CASO MIXTO: Trabajó horas pero también tiene novedad
                 casillaClase += ' timeline-dia__casilla--mixto';
                 // Mostrar horas y alerta pequeña
-                contenido = `${horasTxt}<span style="font-size:0.5em; vertical-align: top;">⚠️</span>`;
+                contenido = `${horasTxt}<span style="font-size:0.9em; vertical-align: top;">⚠️</span>`;
                 titulo = `${diaDatos.fecha}\nHoras: ${horasTxt}\nNovedad: ${tiposStr}`;
             } else if (tieneNovedad) {
                 // Solo novedad (Horas = 0)

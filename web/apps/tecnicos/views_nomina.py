@@ -273,65 +273,99 @@ def nomina_cali(request):
                 idx_tipo = headers_dict.get('TIPOTIEMPOLABORADO', -1)
                 idx_observaciones = headers_dict.get('OBSERVACIONES', headers_dict.get('OBSERVACION', -1))
 
+                from datetime import timedelta
+
                 for fila in datos_novedades[1:]:
                     if len(fila) <= idx_fecha:
                         continue
 
-                    fecha_str = fila[idx_fecha] if idx_fecha != -1 else ''
-                    dia, mes, año = _parsear_fecha(fecha_str)
+                    # Obtener Fechas Crudas
+                    fecha_inicio_str = fila[idx_fecha] if idx_fecha != -1 else ''
+                    fecha_final_str = str(fila[idx_fecha_final]).strip() if idx_fecha_final != -1 and len(fila) > idx_fecha_final else ''
+                    
+                    # Parsear rango de fechas completo
+                    dt_inicio = None
+                    dt_fin = None
+                    
+                    try:
+                        # Intentar parsear inicio
+                        # Nota: _parsear_fecha devuelve (dia_str, mes_str, año_str)
+                        d, m, a = _parsear_fecha(fecha_inicio_str)
+                        if d and m and a:
+                            dt_inicio = datetime(int(a), int(m), int(d))
+                        
+                        # Intentar parsear fin (si no existe o falla, es igual al inicio)
+                        if fecha_final_str:
+                            d_f, m_f, a_f = _parsear_fecha(fecha_final_str)
+                            if d_f and m_f and a_f:
+                                dt_fin = datetime(int(a_f), int(m_f), int(d_f))
+                        
+                        if not dt_fin:
+                            dt_fin = dt_inicio
 
-                    # Filtrar por mes
-                    if not dia or not mes:
+                    except Exception:
+                        continue # Si no podemos parsear fechas, saltamos
+
+                    if not dt_inicio:
                         continue
-                    if mes != filtro_mes:
-                        continue
 
-                    # Agregar día a novedades del calendario
-                    context['dias_con_novedades'].add(int(dia))
+                    # Determinar string de rango para visualización (se mantiene estático para todas las tarjetas generadas)
+                    rango_visual = fecha_inicio_str
+                    if dt_fin > dt_inicio:
+                        rango_visual = f"{fecha_inicio_str} - {fecha_final_str}"
 
-                    # Filtrar por supervisor
+                    # Filtrar por Supervisor y Sede (se aplica al registro general)
                     if filtro_supervisor:
                         sup_val = str(fila[idx_supervisor] if idx_supervisor != -1 else '').upper()
                         if filtro_supervisor.upper() not in sup_val:
                             continue
 
-                    # Filtrar por sede
                     if filtro_sede:
                         sede_val = str(fila[idx_sede] if idx_sede != -1 else '').upper()
                         if filtro_sede.upper() not in sede_val:
                             continue
 
-                    # Filtrar por días seleccionados
-                    if dias_seleccionados:
-                        dia_normalizado = str(int(dia))  # "05" -> "5"
-                        if dia_normalizado not in dias_seleccionados:
+                    # =======================================================
+                    # ITERACIÓN: Expandir el rango día por día
+                    # =======================================================
+                    curr_dt = dt_inicio
+                    while curr_dt <= dt_fin:
+                        dia_actual_str = str(curr_dt.day)
+                        mes_actual_str = f"{curr_dt.month:02d}" # "02"
+                        
+                        # 1. Filtro de Mes (Global de la vista)
+                        if mes_actual_str != filtro_mes:
+                            curr_dt += timedelta(days=1)
                             continue
 
-                    # Obtener fecha final para mostrar rango
-                    fecha_final_str = str(fila[idx_fecha_final]).strip() if idx_fecha_final != -1 and len(fila) > idx_fecha_final else ''
+                        # 2. Agregar al calendario de puntos (independiente del filtro de día)
+                        context['dias_con_novedades'].add(curr_dt.day)
 
-                    # Determinar rango de fechas
-                    if fecha_final_str and fecha_final_str != fecha_str:
-                        rango_fechas = f"{fecha_str} - {fecha_final_str}"
-                    else:
-                        rango_fechas = fecha_str
-                    
-                    sede_actual = str(fila[idx_sede] if idx_sede != -1 else '').strip()
-                    horario_oficial = horarios_map.get(sede_actual.upper(), '')
+                        # 3. Filtro de Días Seleccionados (Checkbox/Clic en calendario)
+                        if dias_seleccionados:
+                            if str(curr_dt.day) not in dias_seleccionados:
+                                curr_dt += timedelta(days=1)
+                                continue
+                        
+                        # Si pasa filtros, agregamos la tarjeta para este día específico
+                        sede_actual = str(fila[idx_sede] if idx_sede != -1 else '').strip()
+                        horario_oficial = horarios_map.get(sede_actual.upper(), '')
 
-                    context['novedades_cali'].append({
-                        'sede': sede_actual,
-                        'nombre': fila[idx_nombre] if idx_nombre != -1 else '',
-                        'hora_inicial': fila[idx_h_ini] if idx_h_ini != -1 else '',
-                        'hora_final': fila[idx_h_fin] if idx_h_fin != -1 else '',
-                        'total_horas': fila[idx_total] if idx_total != -1 else '',
-                        'fecha': fecha_str,
-                        'rango_fechas': rango_fechas,
-                        'tipo_tiempo': fila[idx_tipo] if idx_tipo != -1 and len(fila) > idx_tipo else '',
-                        'observaciones': fila[idx_observaciones] if idx_observaciones != -1 and len(fila) > idx_observaciones else '',
-                        'horario_sede': horario_oficial
-                    })
-                
+                        context['novedades_cali'].append({
+                            'sede': sede_actual,
+                            'nombre': fila[idx_nombre] if idx_nombre != -1 else '',
+                            'hora_inicial': fila[idx_h_ini] if idx_h_ini != -1 else '',
+                            'hora_final': fila[idx_h_fin] if idx_h_fin != -1 else '',
+                            'total_horas': fila[idx_total] if idx_total != -1 else '',
+                            'fecha': curr_dt.strftime('%d/%m/%Y'), # Fecha específica de este día expandido
+                            'rango_fechas': rango_visual,          # Rango original completo (contexto)
+                            'tipo_tiempo': fila[idx_tipo] if idx_tipo != -1 and len(fila) > idx_tipo else '',
+                            'observaciones': fila[idx_observaciones] if idx_observaciones != -1 and len(fila) > idx_observaciones else '',
+                            'horario_sede': horario_oficial
+                        })
+
+                        curr_dt += timedelta(days=1)
+
                 # Ordenar alfabéticamente por nombre
                 context['novedades_cali'].sort(key=lambda x: x['nombre'])
         except Exception as e:
