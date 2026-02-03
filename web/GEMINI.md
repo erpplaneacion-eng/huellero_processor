@@ -87,8 +87,10 @@ The **Nómina** module (`/tecnicos/nomina-cali/`) has been transformed into a po
 - **Sede-Based Team View**: Clicking on an employee name opens a comprehensive team panel.
     - **Contextual View**: Instead of just one person, it displays the full team belonging to that same Sede.
     - **Comparative Timelines**: Multiple horizontal timelines allow coordinators to compare shifts and novelties across the entire local staff simultaneously.
-- **One-Click Audit**: Clicking on any name in the novelty lists instantly populates the team timeline, allowing coordinators to verify if reported novelties from AppSheet have been correctly reflected in the payroll records.
+    - **One-Click Audit**: Clicking on any name in the novelty lists instantly populates the team timeline, allowing coordinators to verify if reported novelties from AppSheet have been correctly reflected in the payroll records.
+- **Virtual Expansion of Novedades**: To improve visibility, single entries in the `novedades_cali` sheet that cover a date range (e.g., Feb 2 to Feb 4) are virtually expanded into individual daily cards in the frontend. This ensures that filtering by any intermediate day (e.g., Feb 3) correctly displays the active novelty.
 - **Dynamic Accuracy Engine**: Total hours and Worked Days are recalculated in real-time by the frontend, ensuring the "Stats Badges" are 100% consistent with the visual timeline blocks.
+
 - **Schedule Cross-Reference**: Novelty cards display the **Official Sede Schedule** (from the HORARIOS sheet) in the top-right corner, allowing immediate contrast with the reported novelty hours at the bottom.
 
 ### Web Interface Improvements (Audit & Traceability)
