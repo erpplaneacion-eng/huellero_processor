@@ -147,13 +147,9 @@ class FacturacionService:
 
         hoja_fact = self.sheets_service.obtener_hoja(self.libro, 'facturacion')
 
-        # Obtener última fila con datos
-        datos_actuales = hoja_fact.get_all_values()
-        ultima_fila = len(datos_actuales) + 1
-
-        # Insertar registros
-        rango = f"A{ultima_fila}:L{ultima_fila + len(registros) - 1}"
-        hoja_fact.update(values=registros, range_name=rango)
+        # Usar append_rows para insertar múltiples registros eficientemente
+        # y manejar automáticamente la expansión de la hoja si es necesario.
+        hoja_fact.append_rows(registros, value_input_option='USER_ENTERED')
 
         return len(registros)
 

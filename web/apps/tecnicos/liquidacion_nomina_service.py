@@ -271,13 +271,9 @@ class LiquidacionNominaService:
 
         hoja = self.crear_hoja_si_no_existe()
 
-        # Obtener última fila con datos
-        datos_actuales = hoja.get_all_values()
-        ultima_fila = len(datos_actuales) + 1
-
-        # Insertar registros
-        rango = f"A{ultima_fila}:O{ultima_fila + len(registros) - 1}"
-        hoja.update(values=registros, range_name=rango)
+        # Usar append_rows para insertar múltiples registros eficientemente
+        # y manejar automáticamente la expansión de la hoja si es necesario.
+        hoja.append_rows(registros, value_input_option='USER_ENTERED')
 
         return len(registros)
 
