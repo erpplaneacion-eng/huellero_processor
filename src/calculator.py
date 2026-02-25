@@ -170,6 +170,7 @@ class Calculator:
                     'CODIGO COLABORADOR': int(turno['codigo']),
                     'NOMBRE COMPLETO DEL COLABORADOR': turno['nombre'],
                     'DOCUMENTO DEL COLABORADOR': '',
+                    'CARGO': '',
                     'FECHA': fecha_str,
                     'DIA': dia_semana,
                     '# MARCACIONES AM': marc_am,
@@ -177,6 +178,7 @@ class Calculator:
                     'HORA DE INGRESO': entrada_str,
                     'HORA DE SALIDA': '00:00',
                     'TOTAL HORAS LABORADAS': round(horas_p1, 2),
+                    'LÍMITE HORAS DÍA': '',
                     'OBSERVACION': observaciones
                 }
                 resultados.append(res_p1)
@@ -193,6 +195,7 @@ class Calculator:
                     'CODIGO COLABORADOR': int(turno['codigo']),
                     'NOMBRE COMPLETO DEL COLABORADOR': turno['nombre'],
                     'DOCUMENTO DEL COLABORADOR': '',
+                    'CARGO': '',
                     'FECHA': fecha_str_p2,
                     'DIA': dia_semana_p2,
                     '# MARCACIONES AM': 0,  # No duplicar conteos
@@ -200,6 +203,7 @@ class Calculator:
                     'HORA DE INGRESO': '00:00',
                     'HORA DE SALIDA': salida_str.replace('*', ''),
                     'TOTAL HORAS LABORADAS': round(horas_p2, 2),
+                    'LÍMITE HORAS DÍA': '',
                     'OBSERVACION': observaciones
                 }
                 resultados.append(res_p2)
@@ -210,6 +214,7 @@ class Calculator:
                     'CODIGO COLABORADOR': int(turno['codigo']),
                     'NOMBRE COMPLETO DEL COLABORADOR': turno['nombre'],
                     'DOCUMENTO DEL COLABORADOR': '',  # Se llenará con maestro si existe
+                    'CARGO': '',
                     'FECHA': fecha_str,
                     'DIA': dia_semana,
                     '# MARCACIONES AM': marc_am,
@@ -217,6 +222,7 @@ class Calculator:
                     'HORA DE INGRESO': entrada_str,
                     'HORA DE SALIDA': salida_str,
                     'TOTAL HORAS LABORADAS': turno['horas'] if turno['horas'] else '',
+                    'LÍMITE HORAS DÍA': '',
                     'OBSERVACION': observaciones
                 }
                 
@@ -287,6 +293,7 @@ class Calculator:
                             'CODIGO COLABORADOR': int(codigo),
                             'NOMBRE COMPLETO DEL COLABORADOR': nombre_colaborador,
                             'DOCUMENTO DEL COLABORADOR': doc_colaborador,
+                            'CARGO': '',
                             'FECHA': fecha_relleno_str,
                             'DIA': dia_semana_relleno,
                             '# MARCACIONES AM': '',
@@ -294,6 +301,7 @@ class Calculator:
                             'HORA DE INGRESO': '',
                             'HORA DE SALIDA': '',
                             'TOTAL HORAS LABORADAS': '',
+                            'LÍMITE HORAS DÍA': '',
                             'OBSERVACION': config.OBSERVACIONES['SIN_REGISTROS']
                         }
                         nuevos_registros.append(nuevo_reg)
@@ -308,22 +316,30 @@ class Calculator:
     
     def agregar_datos_maestro(self, df_resultado, ruta_maestro):
         """
-        Agrega datos del archivo maestro de empleados
+        Agrega datos del archivo maestro de empleados, incluyendo su cargo
+        y límite de horas por día.
         
         Args:
             df_resultado: DataFrame con resultados
             ruta_maestro: Ruta al archivo maestro
             
         Returns:
-            DataFrame con datos de maestro
+            DataFrame con datos de maestro y validación de horas
         """
         try:
-            logger.info(f"Cargando archivo maestro: {ruta_maestro}")
+            logger.info(f"Cargando archivo maestro y configuración de cargos desde: {ruta_maestro}")
             
-            # Leer maestro
-            df_maestro = pd.read_excel(ruta_maestro)
+            # Leer las hojas del archivo maestro
+            df_maestro = pd.read_excel(ruta_maestro, sheet_name='empleados_ejemplo')
             
-            # Renombrar columnas si es necesario
+            # Intentar cargar hojas adicionales si existen, de lo contrario crear DataFrames vacíos
+            try:
+                df_cargos = pd.read_excel(ruta_maestro, sheet_name='horas_cargos')
+            except ValueError:
+                logger.warning("Hoja 'horas_cargos' no encontrada en archivo maestro.")
+                df_cargos = pd.DataFrame(columns=['id_cargo', 'cargo', 'horas_dia'])
+                
+            # Renombrar columnas si es necesario para df_maestro
             columnas_map = {}
             for col in df_maestro.columns:
                 col_upper = col.upper()
@@ -333,20 +349,39 @@ class Calculator:
                     columnas_map[col] = 'DOCUMENTO'
                 elif 'NOMBRE' in col_upper:
                     columnas_map[col] = 'NOMBRE_MAESTRO'
+                elif 'CARGO' in col_upper:
+                    columnas_map[col] = 'CARGO_ID'
             
             df_maestro = df_maestro.rename(columns=columnas_map)
             
             # Asegurar que CODIGO sea numérico
             df_maestro['CODIGO'] = pd.to_numeric(df_maestro['CODIGO'], errors='coerce')
             
+            # Preparar cruce con cargos
+            if not df_cargos.empty and 'CARGO_ID' in df_maestro.columns:
+                # Renombrar para que coincida para el merge
+                df_cargos = df_cargos.rename(columns={'id_cargo': 'CARGO_ID'})
+                
+                # Hacer merge de maestro con cargos para obtener el nombre del cargo y horas límite
+                df_maestro = df_maestro.merge(
+                    df_cargos[['CARGO_ID', 'cargo', 'horas_dia']], 
+                    on='CARGO_ID', 
+                    how='left'
+                )
+                # Renombrar a columnas finales deseadas
+                df_maestro = df_maestro.rename(columns={'cargo': 'NOMBRE_CARGO', 'horas_dia': 'LIMITE_HORAS_DIA'})
+            else:
+                df_maestro['NOMBRE_CARGO'] = ''
+                df_maestro['LIMITE_HORAS_DIA'] = config.HORAS_LIMITE_JORNADA # Usar configuración global por defecto
+            
             # Seleccionar columnas relevantes
-            columnas_maestro = ['CODIGO']
+            columnas_maestro = ['CODIGO', 'NOMBRE_CARGO', 'LIMITE_HORAS_DIA']
             if 'DOCUMENTO' in df_maestro.columns:
                 columnas_maestro.append('DOCUMENTO')
             
             df_maestro = df_maestro[columnas_maestro].drop_duplicates('CODIGO')
             
-            # Hacer merge
+            # Hacer merge con df_resultado
             df_resultado = df_resultado.merge(
                 df_maestro,
                 left_on='CODIGO COLABORADOR',
@@ -354,18 +389,68 @@ class Calculator:
                 how='left'
             )
             
+            # Actualizar columnas en el resultado
+            
             # Actualizar columna de documento (convertir a entero para evitar notación científica)
             if 'DOCUMENTO' in df_resultado.columns:
                 df_resultado['DOCUMENTO DEL COLABORADOR'] = df_resultado['DOCUMENTO'].apply(
                     lambda x: str(int(x)) if pd.notna(x) and x != '' else ''
                 )
                 df_resultado = df_resultado.drop('DOCUMENTO', axis=1)
+                
+            # Actualizar Cargo
+            if 'NOMBRE_CARGO' in df_resultado.columns:
+                df_resultado['CARGO'] = df_resultado['NOMBRE_CARGO'].fillna('')
+                df_resultado = df_resultado.drop('NOMBRE_CARGO', axis=1)
+                
+            # Actualizar Límite Horas
+            if 'LIMITE_HORAS_DIA' in df_resultado.columns:
+                df_resultado['LÍMITE HORAS DÍA'] = df_resultado['LIMITE_HORAS_DIA'].fillna('')
+                
+                # Validación de horas excedidas por cargo
+                def validar_exceso(row):
+                    observacion = str(row['OBSERVACION']) if pd.notna(row['OBSERVACION']) else ''
+                    
+                    # Evitar duplicar la alerta
+                    if 'EXCEDE LÍMITE DE HORAS DEL CARGO' in observacion:
+                        return observacion
+                        
+                    # Verificar que haya valores numéricos válidos
+                    if pd.notna(row['TOTAL HORAS LABORADAS']) and row['TOTAL HORAS LABORADAS'] != '' and pd.notna(row['LIMITE_HORAS_DIA']) and row['LIMITE_HORAS_DIA'] != '':
+                        try:
+                            horas_laboradas = float(row['TOTAL HORAS LABORADAS'])
+                            limite_cargo = float(row['LIMITE_HORAS_DIA'])
+                            
+                            if horas_laboradas > limite_cargo:
+                                alerta = f"ALERTA: EXCEDE LÍMITE DE HORAS DEL CARGO ({limite_cargo} horas)"
+                                if observacion and observacion != config.OBSERVACIONES['OK'] and observacion != config.OBSERVACIONES['SIN_REGISTROS']:
+                                    return f"{observacion} | {alerta}"
+                                else:
+                                    return alerta
+                        except ValueError:
+                            pass
+                            
+                    return observacion
+
+                df_resultado['OBSERVACION'] = df_resultado.apply(validar_exceso, axis=1)
+                
+                # Remover la alerta genérica de config si la tenemos para este cargo
+                df_resultado['OBSERVACION'] = df_resultado['OBSERVACION'].str.replace(f" | {config.OBSERVACIONES['EXCEDE_JORNADA']}", "", regex=False)
+                df_resultado['OBSERVACION'] = df_resultado['OBSERVACION'].str.replace(config.OBSERVACIONES['EXCEDE_JORNADA'], "", regex=False)
+                
+                # Limpiar "|" sueltos y espacios que puedan quedar
+                df_resultado['OBSERVACION'] = df_resultado['OBSERVACION'].str.strip(' |')
+                
+                # Si quedó vacío por borrar la alerta genérica, poner OK
+                df_resultado['OBSERVACION'] = df_resultado['OBSERVACION'].replace('', config.OBSERVACIONES['OK'])
+                
+                df_resultado = df_resultado.drop('LIMITE_HORAS_DIA', axis=1)
             
             # Eliminar columna CODIGO duplicada
             if 'CODIGO' in df_resultado.columns:
                 df_resultado = df_resultado.drop('CODIGO', axis=1)
             
-            logger.info(f"✅ Datos de maestro agregados")
+            logger.info(f"✅ Datos de maestro agregados (incluyendo cargos y límites de horas)")
             
         except FileNotFoundError:
             logger.warning(f"Archivo maestro no encontrado: {ruta_maestro}")
