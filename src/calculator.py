@@ -179,7 +179,8 @@ class Calculator:
                     'HORA DE SALIDA': '00:00',
                     'TOTAL HORAS LABORADAS': round(horas_p1, 2),
                     'LÍMITE HORAS DÍA': '',
-                    'OBSERVACION': observaciones
+                    'OBSERVACION': observaciones,
+                    'OBSERVACIONES_1': ''
                 }
                 resultados.append(res_p1)
                 
@@ -204,7 +205,8 @@ class Calculator:
                     'HORA DE SALIDA': salida_str.replace('*', ''),
                     'TOTAL HORAS LABORADAS': round(horas_p2, 2),
                     'LÍMITE HORAS DÍA': '',
-                    'OBSERVACION': observaciones
+                    'OBSERVACION': observaciones,
+                    'OBSERVACIONES_1': ''
                 }
                 resultados.append(res_p2)
                 
@@ -223,7 +225,8 @@ class Calculator:
                     'HORA DE SALIDA': salida_str,
                     'TOTAL HORAS LABORADAS': turno['horas'] if turno['horas'] else '',
                     'LÍMITE HORAS DÍA': '',
-                    'OBSERVACION': observaciones
+                    'OBSERVACION': observaciones,
+                    'OBSERVACIONES_1': ''
                 }
                 
                 resultados.append(resultado)
@@ -302,7 +305,8 @@ class Calculator:
                             'HORA DE SALIDA': '',
                             'TOTAL HORAS LABORADAS': '',
                             'LÍMITE HORAS DÍA': '',
-                            'OBSERVACION': config.OBSERVACIONES['SIN_REGISTROS']
+                            'OBSERVACION': config.OBSERVACIONES['SIN_REGISTROS'],
+                            'OBSERVACIONES_1': ''
                         }
                         nuevos_registros.append(nuevo_reg)
                         

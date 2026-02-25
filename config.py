@@ -93,7 +93,8 @@ COLUMNAS_OUTPUT = [
     'HORA DE SALIDA',
     'TOTAL HORAS LABORADAS',
     'LÍMITE HORAS DÍA',
-    'OBSERVACION'
+    'OBSERVACION',
+    'OBSERVACIONES_1'
 ]
 
 # Columnas del archivo maestro (si existe)
@@ -130,7 +131,8 @@ ANCHOS_COLUMNAS = {
     'HORA DE SALIDA': 16,
     'TOTAL HORAS LABORADAS': 20,
     'LÍMITE HORAS DÍA': 18,
-    'OBSERVACION': 50
+    'OBSERVACION': 50,
+    'OBSERVACIONES_1': 40
 }
 
 # ========== CONFIGURACIÓN DE FORMATO DE FECHAS ==========

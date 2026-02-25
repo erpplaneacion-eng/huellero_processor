@@ -13,6 +13,7 @@ try:
     from openpyxl import load_workbook
     from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
     OPENPYXL_AVAILABLE = True
 except ImportError:
     OPENPYXL_AVAILABLE = False
@@ -186,6 +187,25 @@ class ExcelGenerator:
                 
                 # Congelar primera fila
                 ws.freeze_panes = 'A2'
+                
+                # Agregar Data Validation si es la hoja Reporte y existe la columna OBSERVACIONES_1
+                if nombre_hoja == 'Reporte' and 'OBSERVACIONES_1' in headers and 'Conceptos' in wb.sheetnames:
+                    obs1_col_idx = headers.index('OBSERVACIONES_1') + 1
+                    obs1_letter = get_column_letter(obs1_col_idx)
+                    ws_conceptos = wb['Conceptos']
+                    max_row_conceptos = ws_conceptos.max_row
+                    if max_row_conceptos > 1:
+                        dv = DataValidation(type="list", formula1=f"Conceptos!$A$2:$A${max_row_conceptos}", allow_blank=True)
+                        # Optional styling for the dropdown
+                        dv.error ='Su valor no está en la lista'
+                        dv.errorTitle = 'Entrada inválida'
+                        dv.prompt = 'Seleccione una observación'
+                        dv.promptTitle = 'Observación'
+                        ws.add_data_validation(dv)
+                        dv.add(f'{obs1_letter}2:{obs1_letter}{max(2, ws.max_row)}')
+                    
+                    # Ocultar la hoja de conceptos para que quede limpio el reporte
+                    wb['Conceptos'].sheet_state = 'hidden'
             
             # Guardar
             wb.save(ruta_archivo)
@@ -320,6 +340,16 @@ class ExcelGenerator:
             # Nuevas Hojas de Agrupación
             self.crear_hoja_empleados(writer, df_resultado)
             self.crear_hoja_cargos(writer, df_resultado)
+            
+            # Hoja de Conceptos (para validación de datos en OBSERVACIONES_1)
+            try:
+                ruta_maestro = os.path.join(config.DIR_MAESTRO, config.ARCHIVO_MAESTRO)
+                df_conceptos = pd.read_excel(ruta_maestro, sheet_name='conceptos')
+                # Solo guardar la columna de observaciones para la lista desplegable
+                if 'observaciones' in df_conceptos.columns:
+                    df_conceptos[['observaciones']].dropna().to_excel(writer, sheet_name='Conceptos', index=False)
+            except Exception as e:
+                logger.warning(f"No se pudo crear hoja de Conceptos: {str(e)}")
             
             # Hoja de resumen
             if stats:
