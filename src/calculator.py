@@ -337,7 +337,7 @@ class Calculator:
                 df_cargos = pd.read_excel(ruta_maestro, sheet_name='horas_cargos')
             except ValueError:
                 logger.warning("Hoja 'horas_cargos' no encontrada en archivo maestro.")
-                df_cargos = pd.DataFrame(columns=['id_cargo', 'cargo', 'horas_dia'])
+                df_cargos = pd.DataFrame(columns=['id_cargo', 'cargo', 'horas_dia', 'horas_semana', 'numero_colaboradores'])
                 
             # Renombrar columnas si es necesario para df_maestro
             columnas_map = {}
@@ -364,18 +364,25 @@ class Calculator:
                 
                 # Hacer merge de maestro con cargos para obtener el nombre del cargo y horas límite
                 df_maestro = df_maestro.merge(
-                    df_cargos[['CARGO_ID', 'cargo', 'horas_dia']], 
+                    df_cargos[['CARGO_ID', 'cargo', 'horas_dia', 'horas_semana', 'numero_colaboradores']], 
                     on='CARGO_ID', 
                     how='left'
                 )
                 # Renombrar a columnas finales deseadas
-                df_maestro = df_maestro.rename(columns={'cargo': 'NOMBRE_CARGO', 'horas_dia': 'LIMITE_HORAS_DIA'})
+                df_maestro = df_maestro.rename(columns={
+                    'cargo': 'NOMBRE_CARGO', 
+                    'horas_dia': 'LIMITE_HORAS_DIA',
+                    'horas_semana': 'LIMITE_HORAS_SEMANA',
+                    'numero_colaboradores': 'COLABORADORES_ESPERADOS'
+                })
             else:
                 df_maestro['NOMBRE_CARGO'] = ''
                 df_maestro['LIMITE_HORAS_DIA'] = config.HORAS_LIMITE_JORNADA # Usar configuración global por defecto
+                df_maestro['LIMITE_HORAS_SEMANA'] = config.HORAS_LIMITE_JORNADA * 5 # Valor por defecto seguro
+                df_maestro['COLABORADORES_ESPERADOS'] = 1 # Valor por defecto
             
             # Seleccionar columnas relevantes
-            columnas_maestro = ['CODIGO', 'NOMBRE_CARGO', 'LIMITE_HORAS_DIA']
+            columnas_maestro = ['CODIGO', 'NOMBRE_CARGO', 'LIMITE_HORAS_DIA', 'LIMITE_HORAS_SEMANA', 'COLABORADORES_ESPERADOS']
             if 'DOCUMENTO' in df_maestro.columns:
                 columnas_maestro.append('DOCUMENTO')
             
