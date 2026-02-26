@@ -114,7 +114,8 @@ class ShiftBuilder:
                         'entrada_inferida': entrada.get('ESTADO_INFERIDO', False),
                         'salida_inferida': salida.get('ESTADO_INFERIDO', False),
                         'salida_corregida': salida_corregida,
-                        'nocturno_prospectivo': False
+                        'nocturno_prospectivo': False,
+                        'salida_estandar_nocturna': False
                     }
                     
                     turnos_empleado.append(turno)
@@ -138,7 +139,8 @@ class ShiftBuilder:
                         'entrada_inferida': entrada.get('ESTADO_INFERIDO', False),
                         'salida_inferida': False,
                         'salida_corregida': False,
-                        'nocturno_prospectivo': False
+                        'nocturno_prospectivo': False,
+                        'salida_estandar_nocturna': False
                     }
                     
                     turnos_empleado.append(turno)
@@ -206,7 +208,11 @@ class ShiftBuilder:
                     and turno_t['entrada'] is not None
                     and turno_t['salida'] is None
                     and self.es_turno_nocturno(turno_t['entrada'])):
+                
+                encontro_marca_real = False
                 fecha_siguiente = turno_t['fecha'] + timedelta(days=1)
+                
+                # --- PASO 1: Buscar marca real en la mañana (Azul) ---
                 for idx_s, turno_s in enumerate(turnos_empleado):
                     if idx_s in indices_a_eliminar or idx_s == idx_t:
                         continue
@@ -214,7 +220,7 @@ class ShiftBuilder:
                             and turno_s['fecha'] == fecha_siguiente
                             and turno_s['entrada'] is not None
                             and turno_s['entrada'].hour < 10):
-                        # Parear como turno nocturno
+                        # Parear como turno nocturno (MARCA REAL)
                         salida_dt = turno_s['entrada']
                         horas = (salida_dt - turno_t['entrada']).total_seconds() / 3600
                         turno_t['salida'] = salida_dt
@@ -222,8 +228,25 @@ class ShiftBuilder:
                         turno_t['completo'] = True
                         turno_t['es_nocturno'] = True
                         turno_t['nocturno_prospectivo'] = True
+                        turno_t['salida_estandar_nocturna'] = False # Azul estándar
                         indices_a_eliminar.add(idx_s)
+                        encontro_marca_real = True
                         break
+                
+                # --- PASO 2: Si NO hubo marca real, inferir 6 AM (Morado) ---
+                if not encontro_marca_real:
+                    salida_inferida = datetime.combine(
+                        fecha_siguiente, 
+                        datetime.min.time()
+                    ).replace(hour=config.HORA_SALIDA_ESTANDAR_NOCTURNA)
+                    
+                    horas = (salida_inferida - turno_t['entrada']).total_seconds() / 3600
+                    turno_t['salida'] = salida_inferida
+                    turno_t['horas'] = round(horas, 2)
+                    turno_t['completo'] = True
+                    turno_t['es_nocturno'] = True
+                    turno_t['salida_estandar_nocturna'] = True # Morado
+                    turno_t['salida_inferida'] = True
 
         if indices_a_eliminar:
             turnos_empleado = [t for idx, t in enumerate(turnos_empleado) if idx not in indices_a_eliminar]

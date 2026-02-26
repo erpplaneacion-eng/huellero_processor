@@ -61,7 +61,11 @@ class Calculator:
         
         # Turno nocturno
         if turno['es_nocturno'] and turno['completo']:
-            observaciones.append(config.OBSERVACIONES['TURNO_NOCTURNO'])
+            # Priorizar observación de salida estándar si aplica
+            if turno.get('salida_estandar_nocturna', False):
+                observaciones.append(config.OBSERVACIONES['SALIDA_ESTANDAR_NOCTURNA'])
+            else:
+                observaciones.append(config.OBSERVACIONES['TURNO_NOCTURNO'])
         
         # Estados inferidos
         if turno.get('entrada_inferida', False):

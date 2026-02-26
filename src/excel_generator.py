@@ -104,6 +104,7 @@ class ExcelGenerator:
                 color_advertencia = PatternFill(start_color=config.COLORES['AMARILLO'][1:], end_color=config.COLORES['AMARILLO'][1:], fill_type='solid')
                 color_error = PatternFill(start_color=config.COLORES['NARANJA'][1:], end_color=config.COLORES['NARANJA'][1:], fill_type='solid')
                 color_nocturno = PatternFill(start_color=config.COLORES['AZUL'][1:], end_color=config.COLORES['AZUL'][1:], fill_type='solid')
+                color_morado = PatternFill(start_color=config.COLORES['MORADO'][1:], end_color=config.COLORES['MORADO'][1:], fill_type='solid')
                 
                 # Fuentes
                 font_encabezado = Font(bold=True, color='FFFFFF', size=11)
@@ -162,6 +163,8 @@ class ExcelGenerator:
                         fill_color = color_ok
                     elif observacion == config.OBSERVACIONES.get('SIN_REGISTROS', 'SIN REGISTROS'):
                         fill_color = color_nocturno
+                    elif config.OBSERVACIONES.get('SALIDA_ESTANDAR_NOCTURNA') in observacion:
+                        fill_color = color_morado
                     elif 'TURNO_NOCTURNO' in observacion:
                         fill_color = color_nocturno
                     elif 'ALERTA' in observacion:

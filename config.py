@@ -50,10 +50,11 @@ HORA_FIN_PM = 24     # 23:59
 # Horarios para inferencia de estados
 # Si una marcación sin estado ocurre en estos rangos, se infiere como:
 RANGO_INFERENCIA_ENTRADA = [(3, 11)]   # 03:00 a 11:00 -> probablemente ENTRADA
-RANGO_INFERENCIA_SALIDA = [(14, 20)]   # 14:00 a 20:00 -> probablemente SALIDA
+RANGO_INFERENCIA_SALIDA = [(14, 21)]   # 14:00 a 21:00 -> probablemente SALIDA
 
 # Definición de turno nocturno (hora de inicio)
-HORA_INICIO_TURNO_NOCTURNO = 16.33  # A partir de las 16:20 se considera inicio de nocturno
+HORA_INICIO_TURNO_NOCTURNO = 20.0  # A partir de las 20:00 se considera inicio de nocturno
+HORA_SALIDA_ESTANDAR_NOCTURNA = 6   # 06:00 AM como salida estándar si se olvida marcar
 
 # ========== CONFIGURACIÓN DE OBSERVACIONES ==========
 
@@ -75,6 +76,7 @@ OBSERVACIONES = {
     'SIN_MARCACIONES': 'Sin marcaciones registradas',
     'SALIDA_CORREGIDA': 'Marcación de salida corregida - empleado registró Entrada en lugar de Salida',
     'NOCTURNO_PROSPECTIVO': 'Turno nocturno detectado por entrada PM y salida AM del día siguiente',
+    'SALIDA_ESTANDAR_NOCTURNA': 'Turno nocturno | Salida Inferida Estándar (6 AM)',
     'SIN_REGISTROS': 'SIN REGISTROS'
 }
 
@@ -114,6 +116,7 @@ COLORES = {
     'NARANJA': '#FFC7CE',    # Observaciones normales
     'ROJO': '#FF0000',       # Alertas críticas
     'AZUL': '#DDEBF7',       # Turno nocturno
+    'MORADO': '#E1BEE7',     # Salida estándar nocturna (Violeta claro)
     'GRIS': '#D9D9D9'        # Sin datos
 }
 

@@ -229,10 +229,12 @@ class DataCleaner:
 
         return df_limpio
     
-    def autocorregir_entradas_pm(self, df):
+    def autocorregir_estados_erroneos(self, df):
         """
-        Corrige automáticamente registros marcados como "Entrada" en horario PM (13:00 - 16:00)
-        cambiándolos a "Salida". Esto asume que son errores de marcación del empleado.
+        Corrige automáticamente registros con estados lógicamente incorrectos:
+        1. "Entrada" en horario PM (13:00 - 19:59) -> Salida (Fin turno diurno)
+        2. "Salida" en horario AM (05:00 - 11:00) -> Entrada (Inicio turno diurno)
+        3. "Salida" en horario nocturno (20:00 - 23:59) -> Entrada (Inicio turno nocturno)
         
         Args:
             df: DataFrame a procesar
@@ -240,37 +242,47 @@ class DataCleaner:
         Returns:
             DataFrame con correcciones aplicadas
         """
-        logger.log_fase("AUTOCORRECCIÓN DE ENTRADAS PM")
+        logger.log_fase("AUTOCORRECCIÓN DE ESTADOS")
         
         df_corregido = df.copy()
         
-        # Filtrar registros que son 'Entrada' y están entre 13:00 y 16:00
-        mask_correccion = (
+        # --- REGLA 1: Entrada en la tarde (13:00 - 19:59) -> Salida ---
+        mask_pm_erronea = (
             (df_corregido['ESTADO'] == 'Entrada') & 
             (df_corregido['FECHA_HORA'].dt.hour >= 13) & 
-            (df_corregido['FECHA_HORA'].dt.hour < 16)
+            (df_corregido['FECHA_HORA'].dt.hour < 20)
         )
         
-        # Contar correcciones
-        num_correcciones = mask_correccion.sum()
+        # --- REGLA 2: Salida en la mañana (05:00 - 11:00) -> Entrada ---
+        mask_am_erronea = (
+            (df_corregido['ESTADO'] == 'Salida') & 
+            (df_corregido['FECHA_HORA'].dt.hour >= 5) & 
+            (df_corregido['FECHA_HORA'].dt.hour < 11)
+        )
         
-        if num_correcciones > 0:
-            # Aplicar corrección
-            df_corregido.loc[mask_correccion, 'ESTADO'] = 'Salida'
-            df_corregido.loc[mask_correccion, 'ESTADO_INFERIDO'] = True # Marcar para rastreo
-            
-            # Log de cambios
-            indices_corregidos = df_corregido[mask_correccion].index
-            for idx in indices_corregidos:
-                registro = df_corregido.loc[idx]
-                logger.info(
-                    f"CORRECCIÓN: {registro['CODIGO']} - {registro['NOMBRE']} | "
-                    f"{registro['FECHA_HORA']} | Entrada -> Salida (Autocorrección PM)"
-                )
-            
-            logger.info(f"✅ Se corrigieron automáticamente {num_correcciones} registros de Entrada -> Salida")
-        else:
-            logger.info("No se encontraron registros para autocorregir en el rango 13:00-16:00")
+        # --- REGLA 3: Salida Nocturna (20:00 - 23:59) -> Entrada ---
+        mask_nocturna_erronea = (
+            (df_corregido['ESTADO'] == 'Salida') & 
+            (df_corregido['FECHA_HORA'].dt.hour >= 20)
+        )
+        
+        # Aplicar correcciones
+        for mask, nuevo_estado, motivo in [
+            (mask_pm_erronea, 'Salida', 'Corrección: Entrada PM -> Salida (13-20h)'),
+            (mask_am_erronea, 'Entrada', 'Corrección: Salida AM -> Entrada (05-11h)'),
+            (mask_nocturna_erronea, 'Entrada', 'Corrección: Salida Nocturna -> Entrada (20-24h)')
+        ]:
+            num_corr = mask.sum()
+            if num_corr > 0:
+                df_corregido.loc[mask, 'ESTADO'] = nuevo_estado
+                df_corregido.loc[mask, 'ESTADO_INFERIDO'] = True
+                
+                indices = df_corregido[mask].index
+                for idx in indices:
+                    reg = df_corregido.loc[idx]
+                    logger.info(f"AUTO-CORRECCIÓN: {reg['CODIGO']} | {reg['FECHA_HORA']} | {motivo}")
+                
+                logger.info(f"✅ Se corrigieron {num_corr} registros: {motivo}")
             
         return df_corregido
 
@@ -287,8 +299,8 @@ class DataCleaner:
         df = self.cargar_archivo(ruta_archivo)
         df = self.limpiar_estructura(df)
         
-        # Autocorrección ANTES de eliminar duplicados para asegurar consistencia
-        df = self.autocorregir_entradas_pm(df)
+        # Autocorrección de estados erróneos
+        df = self.autocorregir_estados_erroneos(df)
         
         df = self.eliminar_duplicados(df)
         
