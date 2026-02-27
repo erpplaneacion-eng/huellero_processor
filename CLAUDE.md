@@ -117,7 +117,7 @@ Input Excel → DataCleaner → StateInference → ShiftBuilder → Calculator �
 
 - **data_cleaner.py** — Loads Excel, standardizes columns (ID→CODIGO, Nombre→NOMBRE, Fecha/Hora→FECHA_HORA, Estado→ESTADO), converts types, removes duplicate records within 15 minutes keeping the LAST record of each group.
 - **state_inference.py** — Fills missing Entrada/Salida states using three methods in order: time-range heuristics, context from adjacent records, and employee historical patterns. Falls back to `INDEFINIDO`.
-- **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥16:20, exit next morning before 10:00) by assigning to the entry date. Post-processes incomplete PM entries as `nocturno_prospectivo` by pairing them with AM records from the next day. Produces complete and incomplete shift records.
+- **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥20:00, exit next morning before 10:00) by assigning to the entry date. Post-processes incomplete PM entries as `nocturno_prospectivo` by pairing them with AM records from the next day. Produces complete and incomplete shift records.
 - **calculator.py** — Counts AM/PM clock-ins, generates observation codes (OK, TURNO_NOCTURNO, SALIDA_NR, TURNO_LARGO, TRABAJO_DOMINICAL, etc.), and optionally merges employee master data (DOCUMENTO field) from `data/maestro/`. Also calls `rellenar_dias_faltantes()` to insert `SIN_REGISTROS` rows for days between an employee's first and last record that have no attendance. Nocturnal shifts crossing midnight are split into two rows.
 - **excel_generator.py** — Writes the 14-column report with color-coded rows (green=OK, blue=nocturnal, yellow=minor, orange=alert), frozen headers, and a summary sheet. Also generates a separate `CASOS_REVISION_*.xlsx` for records needing manual review.
 - **logger.py** — Dual-output logging (file + console) with statistics tracking across all phases.
@@ -281,7 +281,7 @@ Example for sede with 2 shifts (A, B) and 3 manipuladoras:
 All thresholds, time ranges, feature flags, directory paths, and format strings are centralized here. Key settings:
 - `UMBRAL_DUPLICADOS` (900s / 15 min) — duplicate detection window, keeps LAST record
 - `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — hour ranges for time-based state inference
-- `HORA_INICIO_TURNO_NOCTURNO` (16.33 / 16:20) — nocturnal shift detection threshold
+- `HORA_INICIO_TURNO_NOCTURNO` (20.0 / 20:00) — nocturnal shift detection threshold
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
 - `HORAS_LIMITE_JORNADA` (9.8) — maximum hours per workday, triggers `EXCEDE_JORNADA` observation
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`
@@ -290,16 +290,19 @@ All thresholds, time ranges, feature flags, directory paths, and format strings 
 
 ```env
 # Google Sheets
-GOOGLE_CREDENTIALS_FILE=credentials/nomina.json
-GOOGLE_SHEET_ID=<spreadsheet-id>
+GOOGLE_CREDENTIALS_FILE=credentials/nomina.json   # local dev (file path)
+GOOGLE_CREDENTIALS_JSON=<full-json-contents>       # production/Railway (env var takes precedence)
+GOOGLE_SHEET_ID=<spreadsheet-id>                  # Cali sheet
+GOOGLE_SHEET_ID_YUMBO=<spreadsheet-id>            # Yumbo sheet (optional)
 
 # Django
 DEBUG=True
 SECRET_KEY=<secret-key>
+ALLOWED_HOSTS=<comma-separated-domains>
 
 # Email Gmail (notifications)
 EMAIL_HOST_USER=<gmail-address>
-EMAIL_HOST_PASSWORD=<app-password-16-chars>
+EMAIL_HOST_PASSWORD=<app-password-16-chars>       # Google App Password, NOT regular Gmail password
 EMAIL_COORDINADOR=<recipient-email>
 
 # Webhooks & Cron authentication
