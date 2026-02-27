@@ -54,6 +54,26 @@
     width: auto;
 }
 
+/* Botón PDF */
+.btn--pdf {
+    background: #7b1fa2;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background 0.2s;
+}
+
+.btn--pdf:hover {
+    background: #6a1b9a;
+}
+
 /* ---- Barra de chips globales ---- */
 .dashboard-stats-bar {
     display: flex;
@@ -180,8 +200,9 @@
     white-space: nowrap;
 }
 
-.emp-chip--dias   { background: #e8f5e9; color: #2e7d32; }
-.emp-chip--horas  { background: #e3f2fd; color: #1565c0; }
+.emp-chip--dias    { background: #e8f5e9; color: #2e7d32; }
+.emp-chip--horas   { background: #e3f2fd; color: #1565c0; }
+.emp-chip--limite  { background: #f3e5f5; color: #6a1b9a; }
 .emp-chip--novedad { background: #fff3e0; color: #e65100; }
 
 .empleado-card__chevron {
