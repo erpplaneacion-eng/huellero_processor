@@ -54,12 +54,14 @@ cd web
 python manage.py facturacion_diaria [--fecha YYYY-MM-DD] [--forzar]
 
 # Generate daily nomina_cali records (run at 8 AM)
-python manage.py nomina_cali_diaria [--fecha YYYY-MM-DD] [--forzar]
+python manage.py nomina_cali_diaria [--fecha YYYY-MM-DD] [--forzar] [--sede CALI|YUMBO]
 
 # Generate liquidacion_nomina crossing nomina_cali + facturacion (run at 10 PM)
 # Also sends email notification to coordinator
-python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email]
+python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email] [--sede CALI|YUMBO]
 ```
+
+Omitting `--sede` runs both CALI and YUMBO sequentially.
 
 ### Cron HTTP Endpoints (for Railway/external schedulers)
 
@@ -119,7 +121,7 @@ Input Excel → DataCleaner → StateInference → ShiftBuilder → Calculator �
 - **state_inference.py** — Fills missing Entrada/Salida states using three methods in order: time-range heuristics, context from adjacent records, and employee historical patterns. Falls back to `INDEFINIDO`.
 - **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥20:00, exit next morning before 10:00) by assigning to the entry date. Post-processes incomplete PM entries as `nocturno_prospectivo` by pairing them with AM records from the next day. Produces complete and incomplete shift records.
 - **calculator.py** — Counts AM/PM clock-ins, generates observation codes (OK, TURNO_NOCTURNO, SALIDA_NR, TURNO_LARGO, TRABAJO_DOMINICAL, etc.), and optionally merges employee master data (DOCUMENTO field) from `data/maestro/`. Also calls `rellenar_dias_faltantes()` to insert `SIN_REGISTROS` rows for days between an employee's first and last record that have no attendance. Nocturnal shifts crossing midnight are split into two rows.
-- **excel_generator.py** — Writes the 14-column report with color-coded rows (green=OK, blue=nocturnal, yellow=minor, orange=alert), frozen headers, and a summary sheet. Also generates a separate `CASOS_REVISION_*.xlsx` for records needing manual review.
+- **excel_generator.py** — Writes the 14-column report with color-coded rows (green=OK, blue=nocturnal, purple=salida_estandar_nocturna, yellow=minor, orange=alert, gray=sin_registros), frozen headers, and a summary sheet. Also generates a separate `CASOS_REVISION_*.xlsx` for records needing manual review.
 - **logger.py** — Dual-output logging (file + console) with statistics tracking across all phases.
 
 ### Django Web App (`web/`)
@@ -152,10 +154,11 @@ Manages payroll data through Google Sheets integration.
 
 #### Services
 
+- **constantes.py** — `SEDES` dict (CALI/YUMBO config with env var names) and helpers `obtener_id_hoja(sede_key)` / `obtener_nombre_sede(sede_key)`. All services and views import the sheet ID from here.
 - **google_sheets.py** — Connection service for Google Sheets API using gspread. Requires `credentials/nomina.json` service account file.
 - **facturacion_service.py** — Generates daily ration records per sede. Creates records in `facturacion` sheet.
-- **nomina_cali_service.py** — Generates daily records for manipuladoras with schedules from `HORARIOS` sheet. Supports multiple shifts per sede with automatic rotation.
-- **liquidacion_nomina_service.py** — Crosses `nomina_cali` + `facturacion` to generate payroll liquidation aggregated by sede.
+- **nomina_cali_service.py** — Generates daily records for manipuladoras with schedules from `HORARIOS` sheet. Supports multiple shifts per sede with automatic rotation. Instantiated with `NominaCaliService(sede='CALI'|'YUMBO')`.
+- **liquidacion_nomina_service.py** — Crosses `nomina_cali` + `facturacion` to generate payroll liquidation aggregated by sede. Instantiated with `LiquidacionNominaService(sede='CALI'|'YUMBO')`.
 - **email_service.py** — Sends email notifications via Gmail SMTP. Reports include:
   - KPI summary cards (Total Sedes, Manipuladoras, Con Horas, Con Raciones, Inconsistencias)
   - Breakdown by supervisor with per-sede details (Manipuladoras, Horas, Raciones, Estado)
@@ -194,9 +197,15 @@ The system reads/writes to a Google Sheets workbook with these sheets:
 2. **During day** — Supervisors edit via AppSheet, mark NOVEDAD=SI for changes (triggers webhook)
 3. **10:00 PM** — `liquidacion_nomina_diaria` crosses data, generates liquidation, sends email
 
-#### Views (`views.py`)
+#### Views (split across multiple files)
 
-Uses `_obtener_datos_filtrados()` helper function for common filtering logic:
+Views are split into focused modules; all import shared helpers from `views.py`:
+- **views.py** — Shared utilities only: `_parsear_hora`, `_safe_float`, `_parsear_fecha`, `_parsear_horas_formato`, `_calcular_horas_desde_rango`, `_obtener_datos_filtrados`, `_obtener_novedades_hoja`, and `MESES` constant.
+- **views_facturacion.py** — `facturacion()` view.
+- **views_liquidacion.py** — `liquidacion_nomina()` view.
+- **views_nomina.py** — `nomina_cali()` view.
+
+`_obtener_datos_filtrados()` is the common filtering helper:
 - Filters by supervisor, sede, mes (month)
 - Reads from Google Sheets dynamically
 - Processes rows with custom transformers
@@ -208,6 +217,8 @@ Uses `_obtener_datos_filtrados()` helper function for common filtering logic:
 - Inconsistencias: Records with hours but no rations OR rations but no hours
 
 **Nómina Cali Features (`/supervision/nomina-cali/`):**
+
+Accepts a `?ubicacion=CALI|YUMBO` query parameter (default: CALI) to switch between Google Sheets workbooks via `obtener_id_hoja()`.
 
 The view displays a 3-column layout for auditing and cross-referencing:
 

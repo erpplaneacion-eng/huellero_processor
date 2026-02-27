@@ -1,0 +1,300 @@
+/* =============================================
+   Dashboard de Asistencia - Huellero Processor
+   Corporación Hacia un Valle Solidario
+   ============================================= */
+
+/* ---- Wrapper estrecho para formulario (dentro de container-fluid) ---- */
+.form-wrapper {
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+/* ---- Contenedor principal del dashboard ---- */
+.dashboard-section {
+    width: 100%;
+    padding: 0 0 48px;
+}
+
+/* ---- Header del dashboard ---- */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.dashboard-header__meta h2 {
+    margin: 0 0 4px;
+    font-size: 1.2rem;
+    color: #1a1a2e;
+}
+
+.dashboard-header__meta p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.dashboard-header__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Botones dentro del dashboard: no ocupan ancho completo */
+.dashboard-section .btn,
+.dashboard-header__actions .btn {
+    width: auto;
+}
+
+/* ---- Barra de chips globales ---- */
+.dashboard-stats-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.stat-chip__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.stat-chip--verde  { background: #C6EFCE; color: #276221; border-color: #9ed09e; }
+.stat-chip--amarillo { background: #FFEB9C; color: #7d5f00; border-color: #f0c040; }
+.stat-chip--naranja { background: #FFC7CE; color: #9c0006; border-color: #f4979e; }
+.stat-chip--azul   { background: #DDEBF7; color: #1f4e79; border-color: #9dc3e6; }
+.stat-chip--morado { background: #E1BEE7; color: #4a148c; border-color: #ce93d8; }
+.stat-chip--gris   { background: #D9D9D9; color: #444;    border-color: #bbb; }
+
+/* ---- Buscador ---- */
+.dashboard-search {
+    margin-bottom: 10px;
+}
+
+.dashboard-search input {
+    width: 100%;
+    padding: 10px 16px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.dashboard-search input:focus {
+    border-color: #4f6ef7;
+    box-shadow: 0 0 0 3px rgba(79,110,247,0.12);
+}
+
+/* ---- Conteo de empleados ---- */
+.dashboard-count {
+    font-size: 0.82rem;
+    color: #888;
+    margin-bottom: 14px;
+    padding-left: 2px;
+}
+
+/* ---- Tarjeta de empleado ---- */
+.empleado-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+    margin-bottom: 10px;
+    overflow: hidden;
+    border: 1px solid #e8e8e8;
+}
+
+.empleado-card__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+    flex-wrap: wrap;
+}
+
+.empleado-card__header:hover {
+    background: #f7f9ff;
+}
+
+.empleado-card__codigo {
+    background: #e8ecf7;
+    color: #3a4d8f;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.empleado-card__nombre {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #1a1a2e;
+    flex: 1;
+    min-width: 140px;
+}
+
+.empleado-card__cargo {
+    font-size: 0.78rem;
+    color: #888;
+    white-space: nowrap;
+}
+
+.empleado-card__resumen {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.emp-chip {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 10px;
+    white-space: nowrap;
+}
+
+.emp-chip--dias   { background: #e8f5e9; color: #2e7d32; }
+.emp-chip--horas  { background: #e3f2fd; color: #1565c0; }
+.emp-chip--novedad { background: #fff3e0; color: #e65100; }
+
+.empleado-card__chevron {
+    font-size: 0.75rem;
+    color: #aaa;
+    transition: transform 0.25s;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.empleado-card--abierta .empleado-card__chevron {
+    transform: rotate(90deg);
+}
+
+/* ---- Detalle (tabla) ---- */
+.empleado-card__detalle {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+    border-top: 1px solid transparent;
+}
+
+.empleado-card--abierta .empleado-card__detalle {
+    max-height: 2000px;
+    border-top-color: #e8e8e8;
+}
+
+.empleado-card__detalle-inner {
+    overflow-x: auto;
+    padding: 0 4px 4px;
+}
+
+/* ---- Tabla de registros ---- */
+.registros-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.registros-tabla thead tr {
+    background: #3a4d8f;
+    color: #fff;
+}
+
+.registros-tabla thead th {
+    padding: 9px 12px;
+    text-align: left;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.registros-tabla tbody td {
+    padding: 7px 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    white-space: nowrap;
+}
+
+/* ---- Colores de filas ---- */
+.fila--verde   { background: #C6EFCE; }
+.fila--gris    { background: #D9D9D9; color: #666; }
+.fila--azul    { background: #DDEBF7; }
+.fila--morado  { background: #E1BEE7; }
+.fila--naranja { background: #FFC7CE; }
+.fila--amarillo { background: #FFEB9C; }
+
+/* ---- Leyenda ---- */
+.dashboard-leyenda {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 16px 0 0;
+    font-size: 0.78rem;
+    color: #555;
+}
+
+.leyenda-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.leyenda-item__color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+/* ---- Estado vacío ---- */
+.dashboard-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: #aaa;
+    font-size: 0.95rem;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 600px) {
+    .dashboard-header {
+        flex-direction: column;
+    }
+
+    .dashboard-header__actions {
+        width: 100%;
+    }
+
+    .empleado-card__cargo {
+        display: none;
+    }
+
+    .registros-tabla thead th:nth-child(2),
+    .registros-tabla tbody td:nth-child(2) {
+        display: none;
+    }
+}

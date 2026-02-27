@@ -110,15 +110,72 @@ class HuelleroProcessor:
             nombre_archivo = os.path.basename(ruta_salida)
             nombre_casos = os.path.basename(ruta_casos) if ruta_casos else None
 
+            # Serializar datos para el dashboard frontend
+            datos = self._serializar_datos(df_resultado)
+
             return {
                 'success': True,
                 'archivo': nombre_archivo,
                 'archivo_casos': nombre_casos,
                 'stats': stats,
-                'area': self.area
+                'area': self.area,
+                'datos': datos
             }
 
         except Exception as e:
             logger.error(f"Error durante el procesamiento: {str(e)}")
             logger.log_fin_proceso(exito=False)
             raise
+
+    def _serializar_datos(self, df):
+        """Agrupa el DataFrame por empleado para el dashboard frontend."""
+        import pandas as pd
+
+        def _int_safe(val):
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                return 0
+
+        def _float_safe(val):
+            try:
+                import math
+                f = float(val)
+                return round(f, 2) if not math.isnan(f) else None
+            except (ValueError, TypeError):
+                return None
+
+        def _str_nonempty(val):
+            """Devuelve str si el valor no es NaN ni cadena vacía, si no ''."""
+            if pd.isna(val):
+                return ''
+            s = str(val).strip()
+            return s if s not in ('', 'nan', 'None') else ''
+
+        empleados = {}
+        for _, row in df.iterrows():
+            raw_codigo = row['CODIGO COLABORADOR']
+            if pd.isna(raw_codigo) or str(raw_codigo).strip() == '':
+                continue
+            codigo = str(_int_safe(raw_codigo))
+
+            if codigo not in empleados:
+                empleados[codigo] = {
+                    'codigo': codigo,
+                    'nombre': _str_nonempty(row['NOMBRE COMPLETO DEL COLABORADOR']),
+                    'documento': _str_nonempty(row['DOCUMENTO DEL COLABORADOR']),
+                    'cargo': _str_nonempty(row['CARGO']),
+                    'registros': []
+                }
+            empleados[codigo]['registros'].append({
+                'fecha': _str_nonempty(row['FECHA']),
+                'dia': _str_nonempty(row['DIA']),
+                'am': _int_safe(row['# MARCACIONES AM']),
+                'pm': _int_safe(row['# MARCACIONES PM']),
+                'ingreso': _str_nonempty(row['HORA DE INGRESO']),
+                'salida': _str_nonempty(row['HORA DE SALIDA']),
+                'horas': _float_safe(row['TOTAL HORAS LABORADAS']),
+                'limite': _str_nonempty(row['LÍMITE HORAS DÍA']),
+                'observacion': _str_nonempty(row['OBSERVACION']),
+            })
+        return list(empleados.values())

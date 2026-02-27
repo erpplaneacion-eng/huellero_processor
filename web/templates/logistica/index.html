@@ -3,6 +3,8 @@
 
 {% block title %}{{ area.nombre }}{% endblock %}
 
+{% block container_class %}container-fluid{% endblock %}
+
 {% block content %}
 <!-- Navegación de usuario -->
 <nav class="user-nav">
@@ -22,71 +24,82 @@
     <p class="header__subtitle">Corporación Hacia un Valle Solidario</p>
 </header>
 
-<!-- Formulario -->
-<section id="formSection">
-    <!-- Carga de archivo -->
-    <div class="card">
-        <h2 class="card__title">
-            <span class="card__title-icon">📁</span>
-            Archivo de Huellero
-        </h2>
-        <div class="upload-zone" id="uploadZone">
-            <div class="upload-zone__icon">📤</div>
-            <div class="upload-zone__text">
-                Arrastra el archivo aquí o haz clic para seleccionar
+<!-- Wrapper estrecho para el formulario y estados intermedios -->
+<div class="form-wrapper">
+
+    <!-- Formulario -->
+    <section id="formSection">
+        <!-- Carga de archivo -->
+        <div class="card">
+            <h2 class="card__title">
+                <span class="card__title-icon">📁</span>
+                Archivo de Huellero
+            </h2>
+            <div class="upload-zone" id="uploadZone">
+                <div class="upload-zone__icon">📤</div>
+                <div class="upload-zone__text">
+                    Arrastra el archivo aquí o haz clic para seleccionar
+                </div>
+                <div class="upload-zone__hint">
+                    Formatos aceptados: .xls, .xlsx
+                </div>
             </div>
-            <div class="upload-zone__hint">
-                Formatos aceptados: .xls, .xlsx
+            <input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
+        </div>
+
+        <!-- Opciones -->
+        <div class="card">
+            <h2 class="card__title">
+                <span class="card__title-icon">⚙️</span>
+                Opciones
+            </h2>
+            <label class="checkbox-wrapper">
+                <input type="checkbox" id="usarMaestro" checked>
+                <div>
+                    <div class="checkbox-wrapper__label">Usar archivo maestro de empleados</div>
+                    <div class="checkbox-wrapper__hint">Agrega el número de documento a cada empleado</div>
+                </div>
+            </label>
+        </div>
+
+        <!-- Botón procesar -->
+        <button id="btnProcesar" class="btn btn--primary" disabled>
+            🚀 Procesar Archivo
+        </button>
+    </section>
+
+    <!-- Progreso -->
+    <section id="progressSection" class="progress-section">
+        <div class="card">
+            <h2 class="card__title">
+                <span class="card__title-icon">⏳</span>
+                Procesando...
+            </h2>
+            <div class="progress-bar">
+                <div class="progress-bar__fill" id="progressFill"></div>
+            </div>
+            <div class="progress-status" id="progressStatus">
+                <span class="progress-status__icon">⏳</span>
+                Iniciando...
             </div>
         </div>
-        <input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
-    </div>
+    </section>
 
-    <!-- Opciones -->
-    <div class="card">
-        <h2 class="card__title">
-            <span class="card__title-icon">⚙️</span>
-            Opciones
-        </h2>
-        <label class="checkbox-wrapper">
-            <input type="checkbox" id="usarMaestro" checked>
-            <div>
-                <div class="checkbox-wrapper__label">Usar archivo maestro de empleados</div>
-                <div class="checkbox-wrapper__hint">Agrega el número de documento a cada empleado</div>
-            </div>
-        </label>
-    </div>
+    <!-- Resultado (errores) -->
+    <section id="resultSection" class="result-section">
+        <!-- Se llena dinámicamente con JavaScript -->
+    </section>
 
-    <!-- Botón procesar -->
-    <button id="btnProcesar" class="btn btn--primary" disabled>
-        🚀 Procesar Archivo
-    </button>
-</section>
+</div><!-- /form-wrapper -->
 
-<!-- Progreso -->
-<section id="progressSection" class="progress-section">
-    <div class="card">
-        <h2 class="card__title">
-            <span class="card__title-icon">⏳</span>
-            Procesando...
-        </h2>
-        <div class="progress-bar">
-            <div class="progress-bar__fill" id="progressFill"></div>
-        </div>
-        <div class="progress-status" id="progressStatus">
-            <span class="progress-status__icon">⏳</span>
-            Iniciando...
-        </div>
-    </div>
-</section>
-
-<!-- Resultado -->
-<section id="resultSection" class="result-section">
-    <!-- Se llena dinámicamente con JavaScript -->
+<!-- Dashboard de asistencia (ancho completo) -->
+<section id="dashboardSection" class="dashboard-section" style="display:none">
+    <!-- Renderizado dinámicamente por dashboard.js -->
 </section>
 {% endblock %}
 
 {% block extra_js %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 <script>
     // Configuración del área
     const AREA_CONFIG = {
@@ -96,5 +109,6 @@
         apiDescargar: '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', '')
     };
 </script>
+<script src="{% static 'js/dashboard.js' %}"></script>
 <script src="{% static 'js/app.js' %}"></script>
 {% endblock %}

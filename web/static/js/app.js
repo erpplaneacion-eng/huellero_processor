@@ -136,55 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========== RESULTS ==========
     function mostrarResultadoExito(result) {
         progressSection.classList.remove('active');
-        resultSection.classList.add('active');
-
-        const urlDescarga = AREA_CONFIG.apiDescargar + result.archivo + '/';
-        const urlCasos = result.archivo_casos ? AREA_CONFIG.apiDescargar + result.archivo_casos + '/' : null;
-
-        resultSection.innerHTML = `
-            <div class="card result--success">
-                <div class="result__icon">✅</div>
-                <div class="result__title">Procesamiento Completado</div>
-                <div class="result__message">El archivo de ${AREA_CONFIG.nombre} ha sido procesado exitosamente</div>
-
-                <div class="result__stats">
-                    <div class="result__stat">
-                        <span class="result__stat-label">Empleados procesados</span>
-                        <span class="result__stat-value">${result.stats.empleados_unicos || 0}</span>
-                    </div>
-                    <div class="result__stat">
-                        <span class="result__stat-label">Total registros</span>
-                        <span class="result__stat-value">${result.stats.total_registros || 0}</span>
-                    </div>
-                    <div class="result__stat">
-                        <span class="result__stat-label">Turnos completos</span>
-                        <span class="result__stat-value">${result.stats.turnos_completos || 0}</span>
-                    </div>
-                    <div class="result__stat">
-                        <span class="result__stat-label">Turnos incompletos</span>
-                        <span class="result__stat-value">${result.stats.turnos_incompletos || 0}</span>
-                    </div>
-                    <div class="result__stat">
-                        <span class="result__stat-label">Estados inferidos</span>
-                        <span class="result__stat-value">${result.stats.estados_inferidos || 0}</span>
-                    </div>
-                </div>
-
-                <div class="result__actions">
-                    <a href="${urlDescarga}" class="btn btn--success" download>
-                        📥 Descargar Reporte
-                    </a>
-                    ${urlCasos ? `
-                        <a href="${urlCasos}" class="btn btn--primary" download>
-                            📋 Descargar Casos de Revisión
-                        </a>
-                    ` : ''}
-                    <button class="btn btn--primary" onclick="location.reload()">
-                        🔄 Procesar Otro Archivo
-                    </button>
-                </div>
-            </div>
-        `;
+        renderizarDashboard(result, AREA_CONFIG);
     }
 
     function mostrarResultadoError(error) {
