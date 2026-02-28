@@ -16,6 +16,29 @@ class ShiftBuilder:
         """Inicializa el constructor de turnos"""
         self.turnos = []
         self.casos_especiales = []
+
+    def _hora_decimal(self, fecha_hora):
+        """Convierte datetime a hora decimal (ej: 16:30 -> 16.5)."""
+        return fecha_hora.hour + fecha_hora.minute / 60
+
+    def _es_vigilante_castigo(self, codigo):
+        """Valida si el código está en la regla especial de castigo para vigilantes."""
+        if not config.VIGILANTE_CASTIGO_HABILITADO:
+            return False
+        try:
+            return int(codigo) in set(config.VIGILANTE_CASTIGO_CODIGOS)
+        except (TypeError, ValueError):
+            return False
+
+    def _en_ventana(self, fecha_hora, ventana):
+        """Valida si una hora cae dentro de una ventana decimal [inicio, fin]."""
+        hora = self._hora_decimal(fecha_hora)
+        inicio, fin = ventana
+        return inicio <= hora <= fin
+
+    def _horas_entre(self, inicio, fin):
+        """Calcula horas entre dos datetimes."""
+        return (fin - inicio).total_seconds() / 3600
     
     def es_turno_nocturno(self, fecha_hora_entrada):
         """
@@ -47,6 +70,8 @@ class ShiftBuilder:
         """
         turnos_empleado = []
         df_emp = df_empleado.sort_values('FECHA_HORA').reset_index(drop=True)
+        codigo_empleado = df_emp.iloc[0]['CODIGO'] if len(df_emp) > 0 else None
+        aplicar_castigo_vigilante = self._es_vigilante_castigo(codigo_empleado)
         
         i = 0
         while i < len(df_emp):
@@ -57,38 +82,69 @@ class ShiftBuilder:
                 entrada = registro
                 entrada_fecha_hora = entrada['FECHA_HORA']
                 entrada_hora = entrada_fecha_hora.hour
+                castigo_marcacion_diurna = False
                 
                 # Buscar la salida correspondiente
                 salida = None
                 salida_idx = None
                 salida_corregida = False
 
-                for j in range(i + 1, len(df_emp)):
-                    siguiente = df_emp.iloc[j]
-
-                    if siguiente['ESTADO'] == 'Salida':
-                        salida = siguiente
-                        salida_idx = j
-                        break
-                    elif siguiente['ESTADO'] == 'Entrada':
-                        # Encontró otra entrada antes de salida
-                        # Si es el mismo día, tratar como salida
-                        if siguiente['FECHA_HORA'].date() == entrada_fecha_hora.date():
-                            # NO parear si la primera entrada es madrugada temprana (<8:00)
-                            # y la segunda es claramente nocturna (>=19:00)
-                            # Esto indica patrón de turno nocturno: la primera es salida del día anterior
-                            entrada_es_madrugada_temprana = entrada_hora < 8
-                            hora_siguiente = siguiente['FECHA_HORA'].hour + siguiente['FECHA_HORA'].minute / 60
-                            siguiente_es_nocturno_claro = hora_siguiente >= 19
-
-                            if entrada_es_madrugada_temprana and siguiente_es_nocturno_claro:
-                                # No parear - la entrada de madrugada será salida de turno nocturno anterior
-                                break
-
+                # Regla especial (castigo vigilantes):
+                # Si hay marca AM + PM el mismo día, liquidar como diurno.
+                if (
+                    aplicar_castigo_vigilante
+                    and self._en_ventana(entrada_fecha_hora, config.VIGILANTE_VENTANA_AM)
+                ):
+                    for j in range(i + 1, len(df_emp)):
+                        siguiente = df_emp.iloc[j]
+                        if siguiente['FECHA_HORA'].date() != entrada_fecha_hora.date():
+                            break
+                        if self._en_ventana(siguiente['FECHA_HORA'], config.VIGILANTE_VENTANA_PM):
+                            horas_candidatas = self._horas_entre(entrada_fecha_hora, siguiente['FECHA_HORA'])
+                            if horas_candidatas <= 0 or horas_candidatas > config.HORAS_MAXIMAS_TURNO:
+                                continue
                             salida = siguiente
                             salida_idx = j
-                            salida_corregida = True
-                        break
+                            salida_corregida = siguiente['ESTADO'] == 'Entrada'
+                            castigo_marcacion_diurna = True
+                            break
+
+                if salida is None:
+                    for j in range(i + 1, len(df_emp)):
+                        siguiente = df_emp.iloc[j]
+
+                        if siguiente['ESTADO'] == 'Salida':
+                            horas_candidatas = self._horas_entre(entrada_fecha_hora, siguiente['FECHA_HORA'])
+                            if horas_candidatas <= 0:
+                                continue
+                            if horas_candidatas > config.HORAS_MAXIMAS_TURNO:
+                                # Si la primera salida válida está demasiado lejos, no forzar emparejamiento.
+                                break
+                            salida = siguiente
+                            salida_idx = j
+                            break
+                        elif siguiente['ESTADO'] == 'Entrada':
+                            # Encontró otra entrada antes de salida
+                            # Si es el mismo día, tratar como salida
+                            if siguiente['FECHA_HORA'].date() == entrada_fecha_hora.date():
+                                # NO parear si la primera entrada es madrugada temprana (<8:00)
+                                # y la segunda es claramente nocturna (>=19:00)
+                                # Esto indica patrón de turno nocturno: la primera es salida del día anterior
+                                entrada_es_madrugada_temprana = entrada_hora < 8
+                                hora_siguiente = self._hora_decimal(siguiente['FECHA_HORA'])
+                                siguiente_es_nocturno_claro = hora_siguiente >= 19
+
+                                if entrada_es_madrugada_temprana and siguiente_es_nocturno_claro:
+                                    # No parear - la entrada de madrugada será salida de turno nocturno anterior
+                                    break
+
+                                horas_candidatas = self._horas_entre(entrada_fecha_hora, siguiente['FECHA_HORA'])
+                                if horas_candidatas <= 0 or horas_candidatas > config.HORAS_MAXIMAS_TURNO:
+                                    break
+                                salida = siguiente
+                                salida_idx = j
+                                salida_corregida = True
+                            break
                 
                 # Construir turno
                 if salida is not None:
@@ -100,7 +156,7 @@ class ShiftBuilder:
                     fecha_turno = entrada_fecha_hora.date()
                     
                     # Determinar si es nocturno
-                    es_nocturno = self.es_turno_nocturno(entrada_fecha_hora)
+                    es_nocturno = False if castigo_marcacion_diurna else self.es_turno_nocturno(entrada_fecha_hora)
                     
                     turno = {
                         'codigo': entrada['CODIGO'],
@@ -114,6 +170,7 @@ class ShiftBuilder:
                         'entrada_inferida': entrada.get('ESTADO_INFERIDO', False),
                         'salida_inferida': salida.get('ESTADO_INFERIDO', False),
                         'salida_corregida': salida_corregida,
+                        'castigo_marcacion_diurna': castigo_marcacion_diurna,
                         'nocturno_prospectivo': False,
                         'salida_estandar_nocturna': False
                     }
@@ -126,7 +183,40 @@ class ShiftBuilder:
                 else:
                     # Entrada sin salida
                     fecha_turno = entrada_fecha_hora.date()
-                    
+                    salida_inferida_dt = None
+                    es_nocturno_inferido = self.es_turno_nocturno(entrada_fecha_hora)
+
+                    # Regla especial vigilantes:
+                    # Si quedó marca única en ventana AM/PM, cerrar a +12h.
+                    if aplicar_castigo_vigilante:
+                        if self._en_ventana(entrada_fecha_hora, config.VIGILANTE_VENTANA_AM):
+                            salida_inferida_dt = entrada_fecha_hora + timedelta(hours=12)
+                            es_nocturno_inferido = False
+                        elif self._en_ventana(entrada_fecha_hora, config.VIGILANTE_VENTANA_PM):
+                            salida_inferida_dt = entrada_fecha_hora + timedelta(hours=12)
+                            es_nocturno_inferido = True
+
+                    if salida_inferida_dt is not None:
+                        turno = {
+                            'codigo': entrada['CODIGO'],
+                            'nombre': entrada['NOMBRE'],
+                            'fecha': fecha_turno,
+                            'entrada': entrada_fecha_hora,
+                            'salida': salida_inferida_dt,
+                            'horas': round(self._horas_entre(entrada_fecha_hora, salida_inferida_dt), 2),
+                            'es_nocturno': es_nocturno_inferido,
+                            'completo': True,
+                            'entrada_inferida': entrada.get('ESTADO_INFERIDO', False),
+                            'salida_inferida': True,
+                            'salida_corregida': False,
+                            'castigo_marcacion_diurna': False,
+                            'nocturno_prospectivo': False,
+                            'salida_estandar_nocturna': False
+                        }
+                        turnos_empleado.append(turno)
+                        i += 1
+                        continue
+                     
                     turno = {
                         'codigo': entrada['CODIGO'],
                         'nombre': entrada['NOMBRE'],
@@ -134,11 +224,12 @@ class ShiftBuilder:
                         'entrada': entrada_fecha_hora,
                         'salida': None,
                         'horas': None,
-                        'es_nocturno': self.es_turno_nocturno(entrada_fecha_hora),
+                        'es_nocturno': es_nocturno_inferido,
                         'completo': False,
                         'entrada_inferida': entrada.get('ESTADO_INFERIDO', False),
                         'salida_inferida': False,
                         'salida_corregida': False,
+                        'castigo_marcacion_diurna': False,
                         'nocturno_prospectivo': False,
                         'salida_estandar_nocturna': False
                     }
@@ -189,6 +280,7 @@ class ShiftBuilder:
                     'entrada_inferida': False,
                     'salida_inferida': registro.get('ESTADO_INFERIDO', False),
                     'salida_corregida': False,
+                    'castigo_marcacion_diurna': False,
                     'nocturno_prospectivo': False
                 }
                 

@@ -77,8 +77,17 @@ OBSERVACIONES = {
     'SALIDA_CORREGIDA': 'Marcación de salida corregida - empleado registró Entrada en lugar de Salida',
     'NOCTURNO_PROSPECTIVO': 'Turno nocturno detectado por entrada PM y salida AM del día siguiente',
     'SALIDA_ESTANDAR_NOCTURNA': 'Turno nocturno | Salida Inferida Estándar (6 AM)',
+    'CASTIGO_MARCACION_INCORRECTA_DIURNO': 'Castigo por marcación incorrecta: turno liquidado como diurno',
     'SIN_REGISTROS': 'SIN REGISTROS'
 }
+
+# ========== REGLA ESPECIAL VIGILANTES (CASTIGO) ==========
+# Solo para estos códigos: si tienen marca AM + PM el mismo día,
+# se liquida como turno diurno para castigar mala marcación.
+VIGILANTE_CASTIGO_HABILITADO = True
+VIGILANTE_CASTIGO_CODIGOS = [4, 129, 130, 135]
+VIGILANTE_VENTANA_AM = (3.5, 6.0)   # 03:30 - 06:00
+VIGILANTE_VENTANA_PM = (15.5, 18.0) # 15:30 - 18:00
 
 # ========== CONFIGURACIÓN DE COLUMNAS EXCEL ==========
 

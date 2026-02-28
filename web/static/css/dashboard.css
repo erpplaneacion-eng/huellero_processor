@@ -235,6 +235,17 @@
     padding: 0 4px 4px;
 }
 
+.empleado-card__acciones {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 8px 6px;
+}
+
+.btn--pdf-individual {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.82rem;
+}
+
 /* ---- Tabla de registros ---- */
 .registros-tabla {
     width: 100%;

@@ -77,6 +77,10 @@ class Calculator:
         if turno.get('salida_corregida', False):
             observaciones.append(config.OBSERVACIONES['SALIDA_CORREGIDA'])
 
+        # Regla especial vigilantes: castigo por marcación AM+PM mismo día
+        if turno.get('castigo_marcacion_diurna', False):
+            observaciones.append(config.OBSERVACIONES['CASTIGO_MARCACION_INCORRECTA_DIURNO'])
+
         # Turno nocturno prospectivo (entrada PM + salida AM día siguiente)
         if turno.get('nocturno_prospectivo', False):
             observaciones.append(config.OBSERVACIONES['NOCTURNO_PROSPECTIVO'])

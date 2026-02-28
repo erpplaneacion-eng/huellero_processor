@@ -247,11 +247,18 @@ class DataCleaner:
         df_corregido = df.copy()
         
         # --- REGLA 1: Entrada en la tarde (13:00 - 19:59) -> Salida ---
-        mask_pm_erronea = (
+        mask_pm_erronea_base = (
             (df_corregido['ESTADO'] == 'Entrada') & 
             (df_corregido['FECHA_HORA'].dt.hour >= 13) & 
             (df_corregido['FECHA_HORA'].dt.hour < 20)
         )
+        # No autocorregir esta regla para vigilantes con castigo especial
+        if getattr(config, 'VIGILANTE_CASTIGO_HABILITADO', False):
+            codigos_vigilante = set(getattr(config, 'VIGILANTE_CASTIGO_CODIGOS', []))
+            mask_vigilante = df_corregido['CODIGO'].astype('Int64').isin(codigos_vigilante)
+            mask_pm_erronea = mask_pm_erronea_base & (~mask_vigilante)
+        else:
+            mask_pm_erronea = mask_pm_erronea_base
         
         # --- REGLA 2: Salida en la mañana (05:00 - 11:00) -> Entrada ---
         mask_am_erronea = (

@@ -8,6 +8,7 @@ let _dashEmpleados = [];       // lista completa
 let _dashFiltrados = [];       // lista tras búsqueda
 let _dashResult = null;        // resultado completo de la API
 let _dashAreaConfig = null;    // AREA_CONFIG
+const _PDF_CLASES_EXCLUIDAS = new Set(['fila--verde', 'fila--gris', 'fila--naranja', 'fila--azul']);
 
 /* ===== Punto de entrada ===== */
 function renderizarDashboard(result, areaConfig) {
@@ -153,6 +154,11 @@ function renderizarEmpleadoCard(emp) {
             </div>
             <div class="empleado-card__detalle" id="detalle-${emp.codigo}">
                 <div class="empleado-card__detalle-inner">
+                    <div class="empleado-card__acciones">
+                        <button class="btn btn--pdf btn--pdf-individual" onclick="descargarPDFEmpleado('${emp.codigo}')">
+                            🖨 PDF Individual
+                        </button>
+                    </div>
                     ${renderizarTablaRegistros(emp.registros)}
                 </div>
             </div>
@@ -287,14 +293,9 @@ function _truncar(texto, max) {
 /* ===== PDF: descarga informe de novedades ===== */
 function descargarPDF() {
     // Recopilar novedades: excluir verde (OK), gris (sin registros), naranja (exceso horas) y azul (turno nocturno)
-    const CLASES_EXCLUIDAS = new Set(['fila--verde', 'fila--gris', 'fila--naranja', 'fila--azul']);
-
     const conNovedades = [];
     _dashEmpleados.forEach(emp => {
-        const novs = emp.registros.filter(r => {
-            const clase = determinarClaseFila(r.observacion);
-            return !CLASES_EXCLUIDAS.has(clase);
-        });
+        const novs = _obtenerNovedadesEmpleado(emp);
         if (novs.length > 0) {
             conNovedades.push({ emp, novs });
         }
@@ -306,17 +307,47 @@ function descargarPDF() {
     }
 
     const ventana = window.open('', '_blank');
-    ventana.document.write(_generarHTMLPDF(conNovedades));
+    ventana.document.write(_generarHTMLPDF(conNovedades, { esIndividual: false }));
     ventana.document.close();
     // Esperar a que cargue antes de imprimir
     ventana.addEventListener('load', () => ventana.print());
 }
 
-function _generarHTMLPDF(conNovedades) {
+function descargarPDFEmpleado(codigo) {
+    const emp = _dashEmpleados.find(e => String(e.codigo) === String(codigo));
+    if (!emp) {
+        alert('No se encontró el empleado para generar el PDF.');
+        return;
+    }
+
+    const novs = _obtenerNovedadesEmpleado(emp);
+    if (novs.length === 0) {
+        alert(`No hay novedades para reportar de ${emp.nombre}.`);
+        return;
+    }
+
+    const ventana = window.open('', '_blank');
+    ventana.document.write(_generarHTMLPDF([{ emp, novs }], { esIndividual: true }));
+    ventana.document.close();
+    ventana.addEventListener('load', () => ventana.print());
+}
+
+function _obtenerNovedadesEmpleado(emp) {
+    return emp.registros.filter(r => {
+        const clase = determinarClaseFila(r.observacion);
+        return !_PDF_CLASES_EXCLUIDAS.has(clase);
+    });
+}
+
+function _generarHTMLPDF(conNovedades, opciones = {}) {
     const ahora = new Date();
     const fechaStr = ahora.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
     const archivo = _dashResult.archivo || '';
     const totalNovs = conNovedades.reduce((s, e) => s + e.novs.length, 0);
+    const esIndividual = opciones.esIndividual === true;
+    const titulo = esIndividual
+        ? `Informe Individual de Novedades — ${conNovedades[0]?.emp?.nombre || ''}`
+        : 'Informe de Novedades — Corporación Hacia un Valle Solidario';
 
     const COLORES = {
         'fila--amarillo': { bg: '#FFEB9C', label: 'Advertencia' },
@@ -374,7 +405,7 @@ function _generarHTMLPDF(conNovedades) {
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Informe de Novedades - ${fechaStr}</title>
+<title>${esIndividual ? 'Informe Individual de Novedades' : 'Informe de Novedades'} - ${fechaStr}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 12px; color: #222; padding: 24px; }
@@ -409,7 +440,7 @@ function _generarHTMLPDF(conNovedades) {
 </head>
 <body>
   <div class="portada">
-    <h1>Informe de Novedades — Corporación Hacia un Valle Solidario</h1>
+    <h1>${titulo}</h1>
     <p>Archivo: ${archivo} &nbsp;|&nbsp; Generado: ${fechaStr} &nbsp;|&nbsp;
        Nota: se excluyen registros OK, Sin Registros y Exceso de Horas</p>
   </div>
