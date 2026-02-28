@@ -136,6 +136,26 @@
 /* ---- Buscador ---- */
 .dashboard-search {
     margin-bottom: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.mes-select {
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.mes-select:focus {
+    border-color: #4f6ef7;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(79,110,247,0.12);
 }
 
 .dashboard-search input {

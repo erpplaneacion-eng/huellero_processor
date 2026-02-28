@@ -8,6 +8,7 @@ let _dashEmpleados = [];       // lista completa
 let _dashFiltrados = [];       // lista tras búsqueda
 let _dashResult = null;        // resultado completo de la API
 let _dashAreaConfig = null;    // AREA_CONFIG
+let _dashMesFiltro = '';       // "YYYY-MM" o '' para todos
 const _PDF_CLASES_EXCLUIDAS = new Set(['fila--verde', 'fila--gris', 'fila--naranja', 'fila--azul']);
 
 /* ===== Punto de entrada ===== */
@@ -16,17 +17,16 @@ function renderizarDashboard(result, areaConfig) {
     _dashAreaConfig = areaConfig;
     _dashEmpleados = result.datos || [];
     _dashFiltrados = _dashEmpleados.slice();
+    _dashMesFiltro = '';
 
     const section = document.getElementById('dashboardSection');
     section.style.display = 'block';
 
-    // Ocultar sección de resultado anterior
     const resultSection = document.getElementById('resultSection');
     if (resultSection) resultSection.classList.remove('active');
 
     section.innerHTML = _construirHTML();
 
-    // Eventos
     document.getElementById('dashBuscador').addEventListener('input', function () {
         filtrarEmpleados(this.value.trim());
     });
@@ -38,11 +38,19 @@ function _construirHTML() {
     const urlCasos = archivo_casos ? _dashAreaConfig.apiDescargar + archivo_casos + '/' : null;
 
     const resumen = calcularResumenGlobal(_dashEmpleados);
+    const meses = _extraerMeses(_dashEmpleados);
+    const opcionesMeses = meses.map(m =>
+        `<option value="${m}">${_formatearMes(m)}</option>`
+    ).join('');
 
     return `
         ${_renderizarHeader(stats, archivo, urlCasos)}
-        ${_renderizarStatsBar(resumen)}
+        <div id="dashStatsBar">${_renderizarStatsBar(resumen)}</div>
         <div class="dashboard-search">
+            <select id="dashMes" class="mes-select" onchange="filtrarPorMes(this.value)">
+                <option value="">📅 Todos los meses</option>
+                ${opcionesMeses}
+            </select>
             <input id="dashBuscador" type="text" placeholder="🔍 Buscar por nombre o código...">
         </div>
         <div class="dashboard-count" id="dashCount">
@@ -53,6 +61,27 @@ function _construirHTML() {
         </div>
         ${_renderizarLeyenda()}
     `;
+}
+
+/* ===== Helpers de mes ===== */
+function _extraerMeses(empleados) {
+    const set = new Set();
+    empleados.forEach(emp =>
+        emp.registros.forEach(reg => {
+            if (reg.fecha) {
+                const p = reg.fecha.split('/');
+                if (p.length === 3) set.add(`${p[2]}-${p[1]}`);
+            }
+        })
+    );
+    return Array.from(set).sort().reverse(); // más reciente primero
+}
+
+function _formatearMes(yyyymm) {
+    const nombres = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+                     'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const [y, m] = yyyymm.split('-');
+    return `${nombres[parseInt(m, 10) - 1]} ${y}`;
 }
 
 /* ===== Header ===== */
@@ -328,20 +357,47 @@ function toggleEmpleado(codigo) {
     }
 }
 
-/* ===== Filtrar por búsqueda ===== */
+/* ===== Filtrar por mes ===== */
+function filtrarPorMes(mes) {
+    _dashMesFiltro = mes;
+    const q = (document.getElementById('dashBuscador') || {}).value || '';
+    filtrarEmpleados(q.trim());
+}
+
+/* ===== Filtrar por búsqueda (y mes si está activo) ===== */
 function filtrarEmpleados(query) {
     const q = query.toLowerCase();
-    _dashFiltrados = q
-        ? _dashEmpleados.filter(e =>
-            e.nombre.toLowerCase().includes(q) ||
-            e.codigo.includes(q) ||
-            (e.documento && e.documento.includes(q))
-          )
-        : _dashEmpleados.slice();
+
+    _dashFiltrados = _dashEmpleados
+        .map(emp => {
+            // Filtrar registros por mes si hay mes seleccionado
+            const registros = _dashMesFiltro
+                ? emp.registros.filter(reg => {
+                    const p = (reg.fecha || '').split('/');
+                    return p.length === 3 && `${p[2]}-${p[1]}` === _dashMesFiltro;
+                })
+                : emp.registros;
+            return { ...emp, registros };
+        })
+        .filter(emp =>
+            emp.registros.length > 0 &&
+            (!q ||
+                emp.nombre.toLowerCase().includes(q) ||
+                emp.codigo.includes(q) ||
+                (emp.documento && emp.documento.includes(q))
+            )
+        );
 
     document.getElementById('dashLista').innerHTML = renderizarEmpleados(_dashFiltrados);
     document.getElementById('dashCount').textContent =
         `Mostrando ${_dashFiltrados.length} de ${_dashEmpleados.length} empleados`;
+
+    // Actualizar barra de stats con los datos filtrados
+    const statsBar = document.getElementById('dashStatsBar');
+    if (statsBar) {
+        const resumen = calcularResumenGlobal(_dashFiltrados);
+        statsBar.innerHTML = _renderizarStatsBar(resumen);
+    }
 }
 
 /* ===== Formatear horas (decimal → "Xh YYmin") ===== */
