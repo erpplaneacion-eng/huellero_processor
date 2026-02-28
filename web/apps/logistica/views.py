@@ -128,6 +128,21 @@ class ListarRegistrosView(View):
                 'codigo', 'fecha', 'hora_ingreso'
             )
 
+            processor = HuelleroProcessor(area='logistica')
+            horarios_por_codigo = processor._cargar_horarios_por_codigo()
+
+            def _best_fit_turno(codigo_int, hora_ingreso_str):
+                turnos_raw = horarios_por_codigo.get(codigo_int, [])
+                if not turnos_raw or not hora_ingreso_str or ':' not in hora_ingreso_str:
+                    return ''
+                try:
+                    parts = hora_ingreso_str.split(':')
+                    ingreso_min = int(parts[0]) * 60 + int(parts[1])
+                    e, s = min(turnos_raw, key=lambda t: abs(t[0] - ingreso_min))
+                    return f"{e//60:02d}:{e%60:02d}-{s//60:02d}:{s%60:02d}"
+                except Exception:
+                    return ''
+
             empleados = {}
             for r in registros_qs:
                 codigo = str(r.codigo)
@@ -151,6 +166,7 @@ class ListarRegistrosView(View):
                     'limite':      r.limite_horas_dia,
                     'observacion': r.observacion,
                     'obs1':        r.observaciones_1,
+                    'turno':       _best_fit_turno(r.codigo, r.hora_ingreso),
                 })
 
             datos = list(empleados.values())

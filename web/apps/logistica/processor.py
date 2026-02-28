@@ -337,7 +337,7 @@ class HuelleroProcessor:
             nombre_casos = os.path.basename(ruta_casos) if ruta_casos else None
 
             # Serializar datos para el dashboard frontend (con IDs de BD)
-            datos = self._serializar_datos(df_resultado, db_lookup)
+            datos = self._serializar_datos(df_resultado, db_lookup, horarios_por_codigo)
 
             # Opciones de conceptos para el dropdown en el dashboard
             from apps.logistica.models import Concepto
@@ -359,7 +359,7 @@ class HuelleroProcessor:
             logger.log_fin_proceso(exito=False)
             raise
 
-    def _serializar_datos(self, df, db_lookup=None):
+    def _serializar_datos(self, df, db_lookup=None, horarios_por_codigo=None):
         """Agrupa el DataFrame por empleado para el dashboard frontend."""
         import pandas as pd
 
@@ -390,6 +390,7 @@ class HuelleroProcessor:
             if pd.isna(raw_codigo) or str(raw_codigo).strip() == '':
                 continue
             codigo = str(_int_safe(raw_codigo))
+            codigo_int = int(float(raw_codigo))
 
             if codigo not in empleados:
                 empleados[codigo] = {
@@ -399,10 +400,23 @@ class HuelleroProcessor:
                     'cargo': _str_nonempty(row['CARGO']),
                     'registros': []
                 }
-            fecha_str   = _str_nonempty(row['FECHA'])
+            fecha_str    = _str_nonempty(row['FECHA'])
             hora_ingreso = _str_nonempty(row['HORA DE INGRESO'])
-            db_key = (int(float(raw_codigo)), fecha_str, hora_ingreso)
+            db_key = (codigo_int, fecha_str, hora_ingreso)
             db_info = (db_lookup or {}).get(db_key, {})
+
+            # Best-fit: turno del cargo más cercano a la hora de ingreso real
+            turno_str = ''
+            if horarios_por_codigo and hora_ingreso and ':' in hora_ingreso:
+                turnos_raw = horarios_por_codigo.get(codigo_int, [])
+                if turnos_raw:
+                    try:
+                        parts = hora_ingreso.split(':')
+                        ingreso_min = int(parts[0]) * 60 + int(parts[1])
+                        e, s = min(turnos_raw, key=lambda t: abs(t[0] - ingreso_min))
+                        turno_str = f"{e//60:02d}:{e%60:02d}-{s//60:02d}:{s%60:02d}"
+                    except Exception:
+                        pass
 
             empleados[codigo]['registros'].append({
                 'id':          db_info.get('id'),
@@ -416,5 +430,6 @@ class HuelleroProcessor:
                 'limite':      _str_nonempty(row['LÍMITE HORAS DÍA']),
                 'observacion': _str_nonempty(row['OBSERVACION']),
                 'obs1':        db_info.get('obs1', ''),
+                'turno':       turno_str,
             })
         return list(empleados.values())

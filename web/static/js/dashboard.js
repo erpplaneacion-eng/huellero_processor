@@ -212,9 +212,13 @@ function renderizarTablaRegistros(registros) {
                </select>`
             : `<span class="obs1-nobd">—</span>`;
 
+        const turnoHint = reg.turno
+            ? `<small class="turno-hint">${reg.turno}</small>`
+            : '';
+
         return `
             <tr class="fila ${clase}">
-                <td>${reg.fecha}</td>
+                <td>${reg.fecha}${turnoHint}</td>
                 <td>${reg.dia}</td>
                 <td>${reg.ingreso || '—'}</td>
                 <td>${reg.salida || '—'}</td>
