@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}{{ area.nombre }}{% endblock %}
@@ -6,7 +6,6 @@
 {% block container_class %}container-fluid{% endblock %}
 
 {% block content %}
-<!-- Navegación de usuario -->
 <nav class="user-nav">
     <div class="user-nav__info">
         <span>👤</span>
@@ -14,68 +13,51 @@
         <span class="user-nav__area">({{ area.nombre }})</span>
     </div>
     <div>
-        <a href="{% url 'users:logout' %}" class="user-nav__link">🚪 Cerrar Sesión</a>
+        <a href="{% url 'users:logout' %}" class="user-nav__link">🚪 Cerrar Sesion</a>
     </div>
 </nav>
 
 <header class="header">
     <div class="header__icon">{{ area.icono }}</div>
     <h1 class="header__title">Huellero - {{ area.nombre }}</h1>
-    <p class="header__subtitle">Corporación Hacia un Valle Solidario</p>
+    <p class="header__subtitle">Corporacion Hacia un Valle Solidario</p>
 </header>
 
-<!-- Carga oculta de archivo (solo desde botón "Cargar otro") -->
-<input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
-
-<!-- Wrapper estrecho para estados intermedios -->
-<div class="form-wrapper">
-    <!-- Inicio: selección manual de archivo -->
-    <section id="inicioSection">
-        <div class="card">
-            <h2 class="card__title">
-                <span class="card__title-icon">📁</span>
-                Cargar Archivo de Huellero
-            </h2>
-            <p class="result__message">Selecciona un archivo Excel para procesar la asistencia.</p>
-            <button id="btnSeleccionarArchivo" class="btn btn--primary">
-                📤 Seleccionar archivo
-            </button>
-        </div>
-    </section>
-
-    <!-- Progreso -->
-    <section id="progressSection" class="progress-section">
-        <div class="card">
-            <h2 class="card__title">
-                <span class="card__title-icon">⏳</span>
-                Procesando...
-            </h2>
-            <div class="progress-bar">
-                <div class="progress-bar__fill" id="progressFill"></div>
-            </div>
-            <div class="progress-status" id="progressStatus">
-                <span class="progress-status__icon">⏳</span>
-                Iniciando...
-            </div>
-        </div>
-    </section>
-
-    <!-- Resultado (errores) -->
-    <section id="resultSection" class="result-section">
-        <!-- Se llena dinámicamente con JavaScript -->
-    </section>
-</div><!-- /form-wrapper -->
-
-<!-- Dashboard de asistencia (ancho completo) -->
-<section id="dashboardSection" class="dashboard-section" style="display:none">
-    <!-- Renderizado dinámicamente por dashboard.js -->
+<section id="dashboardSection" class="dashboard-section">
+    <div class="card">
+        <h2 class="card__title">
+            <span class="card__title-icon">⏳</span>
+            Cargando dashboard...
+        </h2>
+        <p class="result__message">Consultando registros procesados.</p>
+    </div>
 </section>
+
+<div id="cargaModal" class="carga-modal" aria-hidden="true">
+    <div class="carga-modal__overlay" onclick="cerrarModalCarga()"></div>
+    <div class="carga-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="cargaModalTitle">
+        <div class="carga-modal__header">
+            <h2 id="cargaModalTitle">Cargar Excel de Huellero</h2>
+            <button type="button" class="carga-modal__close" onclick="cerrarModalCarga()">×</button>
+        </div>
+        <div class="carga-modal__body">
+            <input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
+            <button id="btnSeleccionarArchivo" class="btn btn--primary">Seleccionar archivo</button>
+            <p id="archivoSeleccionado" class="carga-modal__filename"></p>
+            <div id="cargaEstado" class="carga-modal__estado"></div>
+            <div id="cargaResumen" class="carga-modal__resumen"></div>
+            <div class="carga-modal__actions">
+                <button id="btnProcesarArchivo" class="btn btn--success" disabled>Procesar archivo</button>
+                <button type="button" class="btn btn--primary" onclick="cerrarModalCarga()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 <script>
-    // Configuración del área
     const AREA_CONFIG = {
         key: '{{ area_key }}',
         nombre: '{{ area.nombre }}',

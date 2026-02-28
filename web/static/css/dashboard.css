@@ -353,3 +353,120 @@
         display: none;
     }
 }
+
+/* ---- Modal de carga de Excel ---- */
+.carga-modal {
+    position: fixed;
+    inset: 0;
+    display: none;
+    z-index: 1200;
+}
+
+.carga-modal--open {
+    display: block;
+}
+
+.carga-modal__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.carga-modal__dialog {
+    position: relative;
+    width: min(560px, calc(100% - 24px));
+    margin: 8vh auto 0;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.carga-modal__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #ececec;
+}
+
+.carga-modal__header h2 {
+    margin: 0;
+    font-size: 1rem;
+    color: #1a1a2e;
+}
+
+.carga-modal__close {
+    border: 0;
+    background: transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #666;
+}
+
+.carga-modal__body {
+    padding: 16px;
+    display: grid;
+    gap: 12px;
+}
+
+.carga-modal__filename {
+    margin: 0;
+    font-size: 0.86rem;
+    color: #444;
+}
+
+.carga-modal__estado {
+    min-height: 20px;
+    font-size: 0.86rem;
+    color: #555;
+}
+
+.carga-modal__estado--info {
+    color: #1d4ed8;
+}
+
+.carga-modal__estado--success {
+    color: #15803d;
+}
+
+.carga-modal__estado--error {
+    color: #b91c1c;
+}
+
+.carga-modal__resumen {
+    display: none;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 0.84rem;
+    color: #1f2937;
+}
+
+.carga-modal__resumen.is-visible {
+    display: block;
+}
+
+.carga-modal__resumen ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.carga-modal__resumen li {
+    margin: 4px 0;
+}
+
+.carga-modal__actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+    .carga-modal__actions .btn {
+        width: 100%;
+    }
+}

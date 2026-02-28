@@ -43,7 +43,10 @@ class HuelleroProcessor:
         Si ya existe un registro (codigo, fecha, hora_ingreso) no lo duplica.
 
         Returns:
-            dict {(codigo, fecha_str, hora_ingreso): {'id', 'obs1'}}
+            (
+                dict {(codigo, fecha_str, hora_ingreso): {'id', 'obs1'}},
+                {'creados': int, 'existentes': int, 'errores': int}
+            )
         """
         import math
         from datetime import datetime
@@ -112,7 +115,11 @@ class HuelleroProcessor:
                     logger.warning(f"Error guardando registro en BD: {e}")
 
         logger.info(f"Registros BD — nuevos: {creados} | ya existían: {existentes} | errores: {errores}")
-        return lookup
+        return lookup, {
+            'creados': int(creados),
+            'existentes': int(existentes),
+            'errores': int(errores),
+        }
 
     def _cargar_codigos_excluidos(self):
         """Retorna un set con los códigos de empleados marcados como excluidos en la DB."""
@@ -271,7 +278,7 @@ class HuelleroProcessor:
             ruta_casos = generator.generar_casos_especiales(df_resultado)
 
             # ===== GUARDAR EN BASE DE DATOS =====
-            db_lookup = self._guardar_registros_en_db(df_resultado)
+            db_lookup, db_stats = self._guardar_registros_en_db(df_resultado)
 
             # ===== FIN DEL PROCESO =====
             logger.log_fin_proceso(exito=True)
@@ -292,6 +299,7 @@ class HuelleroProcessor:
                 'archivo': nombre_archivo,
                 'archivo_casos': nombre_casos,
                 'stats': stats,
+                'db_stats': db_stats,
                 'area': self.area,
                 'datos': datos,
                 'conceptos': conceptos,

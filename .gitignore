@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -73,3 +73,12 @@ Thumbs.db
 
 .gemini/
 gha-creds-*.json
+
+# Maestro (incluye subcarpetas como data/maestro/fuentes/)
+data/maestro/**/*.xlsx
+data/maestro/**/*.csv
+
+# Inputs/outputs en cualquier profundidad
+data/input/**/*
+data/output/**/*
+
