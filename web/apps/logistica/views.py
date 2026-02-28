@@ -124,11 +124,13 @@ class ListarRegistrosView(View):
         try:
             from apps.logistica.models import Concepto
 
-            registros_qs = RegistroAsistencia.objects.all().order_by(
-                'codigo', 'fecha', 'hora_ingreso'
-            )
-
             processor = HuelleroProcessor(area='logistica')
+            codigos_excluidos = processor._cargar_codigos_excluidos()
+
+            registros_qs = RegistroAsistencia.objects.exclude(
+                codigo__in=codigos_excluidos
+            ).order_by('codigo', 'fecha', 'hora_ingreso')
+
             horarios_por_codigo = processor._cargar_horarios_por_codigo()
 
             def _best_fit_turno(codigo_int, hora_ingreso_str):

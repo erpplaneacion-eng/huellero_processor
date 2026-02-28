@@ -66,8 +66,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const stats = result.stats || {};
         const dbStats = result.db_stats || {};
         const duplicados = Number(stats.duplicados_eliminados || 0);
-        const nombreArchivo = result.archivo ? safeText(result.archivo) : 'No disponible';
-        const nombreCasos = result.archivo_casos ? safeText(result.archivo_casos) : 'No generado';
         const alertaDuplicados = duplicados > 0
             ? `<div class="carga-modal__alerta">⚠ Se detectaron y eliminaron ${duplicados} duplicados en este archivo.</div>`
             : '';
@@ -75,8 +73,6 @@ document.addEventListener('DOMContentLoaded', function () {
         cargaResumen.innerHTML = `
             ${alertaDuplicados}
             <ul>
-                <li><strong>Archivo generado:</strong> ${nombreArchivo}</li>
-                <li><strong>Casos revision:</strong> ${nombreCasos}</li>
                 <li><strong>Empleados:</strong> ${Number(stats.empleados_unicos || 0)}</li>
                 <li><strong>Registros:</strong> ${Number(stats.total_registros || 0)}</li>
                 <li><strong>Duplicados eliminados:</strong> ${duplicados}</li>
