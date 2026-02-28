@@ -35,7 +35,7 @@ function renderizarDashboard(result, areaConfig) {
 /* ===== Construcción HTML principal ===== */
 function _construirHTML() {
     const { stats, archivo, archivo_casos } = _dashResult;
-    const urlDescarga = _dashAreaConfig.apiDescargar + archivo + '/';
+    const urlDescarga = archivo ? _dashAreaConfig.apiDescargar + archivo + '/' : null;
     const urlCasos = archivo_casos ? _dashAreaConfig.apiDescargar + archivo_casos + '/' : null;
 
     const resumen = calcularResumenGlobal(_dashEmpleados);
@@ -58,18 +58,22 @@ function _construirHTML() {
 
 /* ===== Header ===== */
 function _renderizarHeader(stats, nombreArchivo, urlDescarga, urlCasos) {
+    const subtitulo = nombreArchivo
+        ? `📄 ${nombreArchivo}`
+        : '🗄️ Datos desde base de datos';
+
     return `
         <div class="dashboard-header">
             <div class="dashboard-header__meta">
                 <h2>📊 Dashboard de Asistencia</h2>
                 <p>
-                    📄 ${nombreArchivo} &nbsp;|&nbsp;
+                    ${subtitulo} &nbsp;|&nbsp;
                     👤 ${stats.empleados_unicos} empleados &nbsp;|&nbsp;
                     📋 ${stats.total_registros} registros
                 </p>
             </div>
             <div class="dashboard-header__actions">
-                <a href="${urlDescarga}" class="btn btn--success" download>📥 Descargar Excel</a>
+                ${urlDescarga ? `<a href="${urlDescarga}" class="btn btn--success" download>📥 Descargar Excel</a>` : ''}
                 ${urlCasos ? `<a href="${urlCasos}" class="btn btn--primary" download>📋 Casos de Revisión</a>` : ''}
                 <button class="btn btn--pdf" onclick="descargarPDF()">🖨 Informe PDF</button>
                 <button class="btn btn--primary" onclick="location.reload()">🔄 Cargar otro</button>
@@ -241,9 +245,17 @@ function renderizarTablaRegistros(registros) {
 
 /* ===== Guardar OBSERVACIONES_1 vía AJAX ===== */
 function guardarObs1(selectEl) {
-    const registroId = selectEl.dataset.id;
+    const registroId = parseInt(selectEl.dataset.id, 10);
     const obs1 = selectEl.value;
-    const url = _dashAreaConfig.apiGuardarObs1;
+
+    if (!registroId || isNaN(registroId)) {
+        console.warn('guardarObs1: data-id inválido', selectEl.dataset.id);
+        return;
+    }
+
+    // URL desde AREA_CONFIG inyectada en el template, con fallback hardcodeado
+    const url = (_dashAreaConfig && _dashAreaConfig.apiGuardarObs1)
+        || '/logistica/api/registros/obs1/';
 
     selectEl.disabled = true;
     selectEl.style.opacity = '0.6';
@@ -251,21 +263,23 @@ function guardarObs1(selectEl) {
     fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registro_id: parseInt(registroId, 10), obs1: obs1 })
+        body: JSON.stringify({ registro_id: registroId, obs1: obs1 })
     })
     .then(r => r.json())
     .then(data => {
         if (data.ok) {
             selectEl.style.background = '#C6EFCE';
-            setTimeout(() => { selectEl.style.background = ''; }, 1200);
+            setTimeout(() => { selectEl.style.background = ''; }, 1500);
         } else {
             selectEl.style.background = '#FFC7CE';
             console.error('Error al guardar obs1:', data.error);
+            setTimeout(() => { selectEl.style.background = ''; }, 2000);
         }
     })
     .catch(err => {
         selectEl.style.background = '#FFC7CE';
         console.error('Error de red al guardar obs1:', err);
+        setTimeout(() => { selectEl.style.background = ''; }, 2000);
     })
     .finally(() => {
         selectEl.disabled = false;

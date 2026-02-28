@@ -113,6 +113,73 @@ class GuardarObs1View(View):
 
 
 @method_decorator(login_required, name='dispatch')
+class ListarRegistrosView(View):
+    """
+    Devuelve todos los registros guardados en BD con el mismo formato
+    que usa el dashboard, sin necesidad de procesar un Excel.
+    GET /logistica/api/registros/
+    """
+
+    def get(self, request):
+        try:
+            from apps.logistica.models import Concepto
+
+            registros_qs = RegistroAsistencia.objects.all().order_by(
+                'codigo', 'fecha', 'hora_ingreso'
+            )
+
+            empleados = {}
+            for r in registros_qs:
+                codigo = str(r.codigo)
+                if codigo not in empleados:
+                    empleados[codigo] = {
+                        'codigo':    codigo,
+                        'nombre':    r.nombre,
+                        'documento': r.documento,
+                        'cargo':     r.cargo,
+                        'registros': [],
+                    }
+                empleados[codigo]['registros'].append({
+                    'id':          r.id,
+                    'fecha':       r.fecha.strftime('%d/%m/%Y'),
+                    'dia':         r.dia,
+                    'am':          r.marcaciones_am,
+                    'pm':          r.marcaciones_pm,
+                    'ingreso':     r.hora_ingreso,
+                    'salida':      r.hora_salida,
+                    'horas':       r.total_horas,
+                    'limite':      r.limite_horas_dia,
+                    'observacion': r.observacion,
+                    'obs1':        r.observaciones_1,
+                })
+
+            datos = list(empleados.values())
+            conceptos = list(
+                Concepto.objects.values_list('observaciones', flat=True).order_by('observaciones')
+            )
+
+            return JsonResponse({
+                'success':       True,
+                'datos':         datos,
+                'conceptos':     conceptos,
+                'archivo':       None,
+                'archivo_casos': None,
+                'desde_db':      True,
+                'stats': {
+                    'empleados_unicos':      len(datos),
+                    'total_registros':       registros_qs.count(),
+                    'turnos_completos':      0,
+                    'turnos_incompletos':    0,
+                    'duplicados_eliminados': 0,
+                    'estados_inferidos':     0,
+                },
+            })
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@method_decorator(login_required, name='dispatch')
 class DescargarView(View):
     """Vista para descargar archivos generados"""
 

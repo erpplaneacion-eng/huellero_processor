@@ -9,6 +9,19 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
+    // ========== AUTO-CARGA DESDE BD ==========
+    // Cargar registros guardados sin necesidad de subir un Excel
+    if (AREA_CONFIG.apiListarRegistros) {
+        fetch(AREA_CONFIG.apiListarRegistros)
+            .then(r => r.json())
+            .then(result => {
+                if (result.success && result.datos && result.datos.length > 0) {
+                    renderizarDashboard(result, AREA_CONFIG);
+                }
+            })
+            .catch(() => { /* Si falla, el usuario puede subir un Excel normalmente */ });
+    }
+
     // Elementos del DOM
     const uploadZone = document.getElementById('uploadZone');
     const fileInput = document.getElementById('fileInput');

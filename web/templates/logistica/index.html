@@ -105,9 +105,10 @@
     const AREA_CONFIG = {
         key: '{{ area_key }}',
         nombre: '{{ area.nombre }}',
-        apiProcesar: '{% url "logistica:procesar" %}',
-        apiDescargar: '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', ''),
-        apiGuardarObs1: '{% url "logistica:guardar_obs1" %}'
+        apiProcesar:        '{% url "logistica:procesar" %}',
+        apiDescargar:       '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', ''),
+        apiGuardarObs1:     '{% url "logistica:guardar_obs1" %}',
+        apiListarRegistros: '{% url "logistica:listar_registros" %}',
     };
 </script>
 <script src="{% static 'js/dashboard.js' %}"></script>
