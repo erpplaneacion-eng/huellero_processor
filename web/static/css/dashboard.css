@@ -54,6 +54,32 @@
     width: auto;
 }
 
+/* Selector de rango de fechas para descarga */
+.descarga-rango {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 4px 10px;
+}
+
+.descarga-rango__sep {
+    color: #94a3b8;
+    font-size: 0.85rem;
+}
+
+.fecha-input {
+    border: none;
+    background: transparent;
+    font-size: 0.8rem;
+    color: #1e293b;
+    cursor: pointer;
+    outline: none;
+    padding: 2px 0;
+}
+
 /* Botón PDF */
 .btn--pdf {
     background: #7b1fa2;

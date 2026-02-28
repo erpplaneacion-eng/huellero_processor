@@ -177,7 +177,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
             renderizarDashboard(result, AREA_CONFIG);
             mostrarResumenCarga(result);
-            setEstadoCarga('✔ Archivo procesado correctamente.', 'success');
+
+            // Cuenta regresiva y cierre automático para que el usuario
+            // pueda leer el resumen y luego ver los botones en el dashboard
+            let seg = 5;
+            const tick = setInterval(() => {
+                seg--;
+                setEstadoCarga(`✔ Procesado. Cerrando en ${seg}s…`, 'success');
+                if (seg <= 0) {
+                    clearInterval(tick);
+                    cerrarModalCarga();
+                }
+            }, 1000);
+            setEstadoCarga(`✔ Procesado. Cerrando en ${seg}s…`, 'success');
         } catch (error) {
             if (error && error.name === 'AbortError') {
                 setEstadoCarga('El procesamiento tardó demasiado (timeout de 5 minutos). Intenta con un archivo más pequeño o revisa logs.', 'error');

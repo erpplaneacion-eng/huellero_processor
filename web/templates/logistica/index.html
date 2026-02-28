@@ -63,8 +63,9 @@
         nombre: '{{ area.nombre }}',
         apiProcesar:        '{% url "logistica:procesar" %}',
         apiDescargar:       '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', ''),
-        apiGuardarObs1:     '{% url "logistica:guardar_obs1" %}',
-        apiListarRegistros: '{% url "logistica:listar_registros" %}',
+        apiGuardarObs1:          '{% url "logistica:guardar_obs1" %}',
+        apiListarRegistros:      '{% url "logistica:listar_registros" %}',
+        apiDescargarRegistros:   '{% url "logistica:descargar_registros_excel" %}',
     };
 </script>
 <script src="{% static 'js/dashboard.js' %}"></script>

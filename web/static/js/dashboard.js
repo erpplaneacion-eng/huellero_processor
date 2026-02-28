@@ -35,13 +35,12 @@ function renderizarDashboard(result, areaConfig) {
 /* ===== Construcción HTML principal ===== */
 function _construirHTML() {
     const { stats, archivo, archivo_casos } = _dashResult;
-    const urlDescarga = archivo ? _dashAreaConfig.apiDescargar + archivo + '/' : null;
     const urlCasos = archivo_casos ? _dashAreaConfig.apiDescargar + archivo_casos + '/' : null;
 
     const resumen = calcularResumenGlobal(_dashEmpleados);
 
     return `
-        ${_renderizarHeader(stats, archivo, urlDescarga, urlCasos)}
+        ${_renderizarHeader(stats, archivo, urlCasos)}
         ${_renderizarStatsBar(resumen)}
         <div class="dashboard-search">
             <input id="dashBuscador" type="text" placeholder="🔍 Buscar por nombre o código...">
@@ -57,10 +56,15 @@ function _construirHTML() {
 }
 
 /* ===== Header ===== */
-function _renderizarHeader(stats, nombreArchivo, urlDescarga, urlCasos) {
+function _renderizarHeader(stats, nombreArchivo, urlCasos) {
     const subtitulo = nombreArchivo
         ? `📄 ${nombreArchivo}`
         : '🗄️ Datos desde base de datos';
+
+    // Rango por defecto: primer día del mes actual hasta hoy
+    const hoy  = new Date();
+    const hasta = hoy.toISOString().slice(0, 10);
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10);
 
     return `
         <div class="dashboard-header">
@@ -73,13 +77,28 @@ function _renderizarHeader(stats, nombreArchivo, urlDescarga, urlCasos) {
                 </p>
             </div>
             <div class="dashboard-header__actions">
-                ${urlDescarga ? `<a href="${urlDescarga}" class="btn btn--success" download>📥 Descargar Excel</a>` : ''}
+                <div class="descarga-rango">
+                    <input type="date" id="dashDesde" class="fecha-input" value="${desde}" title="Fecha inicio">
+                    <span class="descarga-rango__sep">—</span>
+                    <input type="date" id="dashHasta" class="fecha-input" value="${hasta}" title="Fecha fin">
+                    <button class="btn btn--success" onclick="descargarRegistrosExcel()">📥 Descargar Excel</button>
+                </div>
                 ${urlCasos ? `<a href="${urlCasos}" class="btn btn--primary" download>📋 Casos de Revisión</a>` : ''}
                 <button class="btn btn--pdf" onclick="descargarPDF()">🖨 Informe PDF</button>
                 <button class="btn btn--primary" onclick="cargarOtroArchivo()">🔄 Cargar otro</button>
             </div>
         </div>
     `;
+}
+
+/* ===== Descarga Excel desde BD con rango de fechas ===== */
+function descargarRegistrosExcel() {
+    const desde = document.getElementById('dashDesde').value;
+    const hasta  = document.getElementById('dashHasta').value;
+    const url = new URL(_dashAreaConfig.apiDescargarRegistros, window.location.origin);
+    if (desde) url.searchParams.set('desde', desde);
+    if (hasta)  url.searchParams.set('hasta',  hasta);
+    window.location.href = url.toString();
 }
 
 /* ===== Chips de resumen global ===== */
