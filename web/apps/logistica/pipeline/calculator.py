@@ -161,9 +161,10 @@ class Calculator:
             fecha_str = turno['fecha'].strftime(config.FORMATO_FECHA_OUTPUT)
             dia_semana = config.DIAS_SEMANA[turno['fecha'].weekday()]
 
-            # Verificar si cruza medianoche (turno nocturno que termina al día siguiente)
+            # Verificar si cruza medianoche (cualquier turno que termina al día siguiente).
+            # Esto permite partir correctamente casos como 16:31 -> 04:31 en dos filas.
             cruza_medianoche = False
-            if turno['es_nocturno'] and turno['completo'] and pd.notna(turno['salida']) and pd.notna(turno['entrada']):
+            if turno['completo'] and pd.notna(turno['salida']) and pd.notna(turno['entrada']):
                 if turno['salida'].date() > turno['entrada'].date():
                     cruza_medianoche = True
 
