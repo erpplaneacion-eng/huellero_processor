@@ -19,6 +19,4 @@ urlpatterns = [
     # Área de Logística
     path('logistica/', include('apps.logistica.urls', namespace='logistica')),
 
-    # Área de Supervisión (usa la app de tecnicos)
-    path('supervision/', include('apps.tecnicos.urls', namespace='supervision')),
 ]

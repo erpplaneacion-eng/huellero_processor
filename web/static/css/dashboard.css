@@ -459,6 +459,16 @@
     margin: 4px 0;
 }
 
+.carga-modal__alerta {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    color: #9a3412;
+    font-weight: 600;
+}
+
 .carga-modal__actions {
     display: flex;
     gap: 8px;

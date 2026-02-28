@@ -11,9 +11,6 @@ class PerfilUsuario(models.Model):
 
     AREAS_CHOICES = [
         ('logistica', 'Logística'),
-        ('supervision', 'Supervisión'),
-        ('produccion', 'Producción'),
-        ('mantenimiento', 'Mantenimiento'),
         ('admin', 'Administrador'),
     ]
 
@@ -41,9 +38,6 @@ class PerfilUsuario(models.Model):
         # Mapeo de áreas a URLs
         AREA_URL_MAP = {
             'admin': '/admin/',
-            'supervision': '/supervision/',
             'logistica': '/logistica/',
-            'produccion': '/produccion/',
-            'mantenimiento': '/mantenimiento/',
         }
         return AREA_URL_MAP.get(self.area, '/logistica/')

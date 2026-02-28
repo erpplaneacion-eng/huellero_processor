@@ -75,7 +75,6 @@ INSTALLED_APPS = [
     # Apps propias
     'apps.users',
     'apps.logistica',
-    'apps.tecnicos',
 ]
 
 MIDDLEWARE = [
@@ -181,11 +180,8 @@ LOGOUT_REDIRECT_URL = '/users/login/'
 # CONFIGURACIÓN DEL PROCESADOR DE HUELLERO
 # ===========================================
 
-# Importar configuración del procesador
-sys.path.insert(0, str(PROJECT_ROOT))
-
 try:
-    import config
+    from apps.logistica.pipeline import config
     DATA_INPUT_DIR = config.DIR_INPUT
     DATA_OUTPUT_DIR = config.DIR_OUTPUT
     DATA_MAESTRO_DIR = config.DIR_MAESTRO

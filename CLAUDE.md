@@ -45,6 +45,16 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+### Logística Management Commands
+
+```bash
+cd web
+
+# Load employee master data from Excel into PostgreSQL
+# Reads from data/maestro/empleados.xlsx (sheets: empleados_ejemplo, horas_cargos, horarios, cargos_horarios, conceptos)
+python manage.py cargar_maestro
+```
+
 ### Nómina Management Commands
 
 ```bash
@@ -131,15 +141,32 @@ Browser-based interface for file upload and processing. Deployed to Railway.
 #### Apps Structure
 
 - **apps/users/** — Authentication with role-based access (Logística, Supervisión, Admin, etc.). Users with area "supervision" are redirected to `/supervision/`.
-- **apps/logistica/** — File upload UI and processing API. Uses `processor.py` to wrap the core pipeline.
+- **apps/logistica/** — File upload UI, processing API, and PostgreSQL models. Uses `processor.py` to wrap the core pipeline. Maestro data is loaded from DB (not Excel) in the web context.
 - **apps/tecnicos/** — Nómina management module with Google Sheets integration. Accessible via `/supervision/` URL.
 - **huellero_web/settings.py** — Django config with Railway deployment support, PostgreSQL in production, SQLite in development.
+
+#### PostgreSQL Models (`apps/logistica/models.py`)
+
+| Model | DB Table | Purpose |
+|-------|----------|---------|
+| `Cargo` | `maestro_cargo` | Job positions with `horas_dia`/`horas_semana` limits |
+| `Horario` | `maestro_horario` | Time ranges with `hora_inicio`/`hora_fin` |
+| `CargoHorario` | `maestro_cargo_horario` | Many-to-many: Cargo ↔ Horario (unique_together) |
+| `Empleado` | `maestro_empleado` | Employees with `codigo`, `documento`, FK to `Cargo`, `excluido` flag |
+| `RegistroAsistencia` | `registro_asistencia` | Processed attendance rows; unique_together `(codigo, fecha, hora_ingreso)` |
+| `Concepto` | `maestro_concepto` | Dropdown values for manual `OBSERVACIONES_1` field |
+
+`Empleado.excluido=True` removes the employee entirely from huellero analysis.
+
+`processor.py` loads data from these models via `_cargar_maestro_desde_db()`, `_cargar_horarios_por_codigo()`, and `_cargar_codigos_excluidos()` — the web context never reads Excel maestro files.
 
 #### Key Endpoints
 
 **Logística (`/logistica/`):**
 - `/logistica/` — Main dashboard (requires login)
-- `/logistica/api/procesar/` — POST endpoint for file processing
+- `/logistica/api/procesar/` — POST: process uploaded huellero Excel; returns `{datos, conceptos, stats, db_stats, archivo, archivo_casos}`
+- `/logistica/api/registros/` — GET: list all saved attendance records from DB (same format as procesar response, `desde_db: true`)
+- `/logistica/api/registros/obs1/` — POST `{registro_id, obs1}`: save manual observation to `RegistroAsistencia.observaciones_1`
 - `/logistica/api/descargar/<filename>/` — Download generated reports
 
 **Supervisión (`/supervision/`):**
@@ -291,11 +318,13 @@ Example for sede with 2 shifts (A, B) and 3 manipuladoras:
 
 All thresholds, time ranges, feature flags, directory paths, and format strings are centralized here. Key settings:
 - `UMBRAL_DUPLICADOS` (900s / 15 min) — duplicate detection window, keeps LAST record
-- `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — hour ranges for time-based state inference
+- `TOLERANCIA_HORARIO_MIN` (90 min) — max deviation from cargo schedule before falling back to global ranges
+- `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — fallback hour ranges (03–11 / 14–21)
 - `HORA_INICIO_TURNO_NOCTURNO` (20.0 / 20:00) — nocturnal shift detection threshold
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
 - `HORAS_LIMITE_JORNADA` (9.8) — maximum hours per workday, triggers `EXCEDE_JORNADA` observation
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`
+- `VIGILANTE_CASTIGO_CODIGOS` — hardcoded employee codes `[4, 129, 130, 135]` for whom AM+PM marks on the same day are liquidated as a diurnal shift (punishment for wrong marking). Controlled by `VIGILANTE_CASTIGO_HABILITADO`.
 
 ### Environment Variables (`web/.env`)
 

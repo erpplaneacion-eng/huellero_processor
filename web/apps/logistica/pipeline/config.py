@@ -8,8 +8,9 @@ from pathlib import Path
 
 # ========== CONFIGURACIÓN DE ARCHIVOS ==========
 
-# Directorio raíz del proyecto (donde está config.py)
-BASE_DIR = Path(__file__).resolve().parent
+# Directorio raíz del proyecto (huellero_processor/)
+# pipeline/ → logistica/ → apps/ → web/ → huellero_processor/
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent
 
 # Rutas de directorios (rutas absolutas)
 DIR_INPUT = BASE_DIR / "data" / "input"

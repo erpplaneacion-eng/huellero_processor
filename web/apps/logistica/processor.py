@@ -4,22 +4,16 @@ Corporación Hacia un Valle Solidario
 """
 
 import os
-import sys
-from pathlib import Path
-
-# Agregar el directorio raíz del proyecto al path
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
 
 import pandas as pd
 
-import config
-from src.logger import logger
-from src.data_cleaner import DataCleaner
-from src.state_inference import StateInference
-from src.shift_builder import ShiftBuilder
-from src.calculator import Calculator
-from src.excel_generator import ExcelGenerator
+from apps.logistica.pipeline import config
+from apps.logistica.pipeline.logger import logger
+from apps.logistica.pipeline.data_cleaner import DataCleaner
+from apps.logistica.pipeline.state_inference import StateInference
+from apps.logistica.pipeline.shift_builder import ShiftBuilder
+from apps.logistica.pipeline.calculator import Calculator
+from apps.logistica.pipeline.excel_generator import ExcelGenerator
 
 
 class HuelleroProcessor:
@@ -33,13 +27,13 @@ class HuelleroProcessor:
             area: Nombre del área (logistica, supervision, etc.)
         """
         self.area = area
-        self.maestro_dir = PROJECT_ROOT / 'data' / 'maestro'
-        self.output_dir = PROJECT_ROOT / 'data' / 'output'
+        self.maestro_dir = config.DIR_MAESTRO
+        self.output_dir = config.DIR_OUTPUT
 
     def _guardar_registros_en_db(self, df_resultado):
         """
-        Guarda df_resultado en la tabla RegistroAsistencia.
-        Usa una única transacción para minimizar la latencia de red con PostgreSQL.
+        Guarda df_resultado en la tabla RegistroAsistencia usando operaciones bulk.
+        1 SELECT para encontrar existentes + 1 INSERT para los nuevos → evita N round-trips.
         Si ya existe un registro (codigo, fecha, hora_ingreso) no lo duplica.
 
         Returns:
@@ -88,36 +82,91 @@ class HuelleroProcessor:
             except Exception as e:
                 logger.warning(f"Error preparando fila para BD: {e}")
 
-        lookup = {}
-        creados = existentes = errores = 0
+        if not filas:
+            return {}, {'creados': 0, 'existentes': 0, 'errores': 0}
 
-        # Una sola transacción para todos los get_or_create → reduce latencia de red
-        with transaction.atomic():
-            for f in filas:
+        codigos = {f['codigo'] for f in filas}
+        fechas  = {f['fecha']  for f in filas}
+
+        # ── 1 SELECT: todos los registros existentes para estos empleados y fechas ──
+        existentes_db = {
+            (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): {
+                'id': r.id, 'obs1': r.observaciones_1,
+            }
+            for r in RegistroAsistencia.objects.filter(
+                codigo__in=codigos, fecha__in=fechas
+            ).only('id', 'codigo', 'fecha', 'hora_ingreso', 'observaciones_1')
+        }
+
+        # Determinar qué filas son nuevas
+        nuevos_filas = [
+            f for f in filas
+            if (f['codigo'], f['fecha_str'], f['hora_ingreso']) not in existentes_db
+        ]
+
+        creados = errores = 0
+
+        if nuevos_filas:
+            objs = []
+            for f in nuevos_filas:
                 try:
-                    obj, creado = RegistroAsistencia.objects.get_or_create(
+                    objs.append(RegistroAsistencia(
                         codigo=f['codigo'],
                         fecha=f['fecha'],
                         hora_ingreso=f['hora_ingreso'],
-                        defaults={k: v for k, v in f.items()
-                                  if k not in ('codigo', 'fecha', 'hora_ingreso', 'fecha_str')},
-                    )
-                    lookup[(f['codigo'], f['fecha_str'], f['hora_ingreso'])] = {
-                        'id': obj.id,
-                        'obs1': obj.observaciones_1,
-                    }
-                    if creado:
-                        creados += 1
-                    else:
-                        existentes += 1
+                        nombre=f['nombre'],
+                        documento=f['documento'],
+                        cargo=f['cargo'],
+                        dia=f['dia'],
+                        marcaciones_am=f['marcaciones_am'],
+                        marcaciones_pm=f['marcaciones_pm'],
+                        hora_salida=f['hora_salida'],
+                        total_horas=f['total_horas'],
+                        limite_horas_dia=f['limite_horas_dia'],
+                        observacion=f['observacion'],
+                        observaciones_1=f['observaciones_1'],
+                    ))
                 except Exception as e:
                     errores += 1
-                    logger.warning(f"Error guardando registro en BD: {e}")
+                    logger.warning(f"Error preparando objeto BD: {e}")
 
-        logger.info(f"Registros BD — nuevos: {creados} | ya existían: {existentes} | errores: {errores}")
+            if objs:
+                try:
+                    # ── 1 INSERT bulk para todos los nuevos ──
+                    with transaction.atomic():
+                        RegistroAsistencia.objects.bulk_create(objs, ignore_conflicts=True)
+                    creados = len(objs)
+
+                    # Re-fetch para obtener IDs de los recién creados
+                    nuevos_codigos = {f['codigo'] for f in nuevos_filas}
+                    nuevos_fechas  = {f['fecha']  for f in nuevos_filas}
+                    nuevos_db = {
+                        (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): {
+                            'id': r.id, 'obs1': r.observaciones_1,
+                        }
+                        for r in RegistroAsistencia.objects.filter(
+                            codigo__in=nuevos_codigos, fecha__in=nuevos_fechas
+                        ).only('id', 'codigo', 'fecha', 'hora_ingreso', 'observaciones_1')
+                    }
+                    existentes_db.update(nuevos_db)
+                except Exception as e:
+                    errores += len(objs)
+                    logger.warning(f"Error en bulk_create: {e}")
+
+        existentes_count = len(filas) - len(nuevos_filas)
+
+        # Construir lookup final
+        lookup = {
+            (f['codigo'], f['fecha_str'], f['hora_ingreso']): existentes_db.get(
+                (f['codigo'], f['fecha_str'], f['hora_ingreso']), {}
+            )
+            for f in filas
+        }
+
+        logger.info(f"Registros BD — nuevos: {creados} | ya existían: {existentes_count} | errores: {errores}")
         return lookup, {
             'creados': int(creados),
-            'existentes': int(existentes),
+            'existentes': int(existentes_count),
             'errores': int(errores),
         }
 

@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const dashboardSection = document.getElementById('dashboardSection');
 
     let selectedFile = null;
+    let estadoInterval = null;
 
     function setEstadoCarga(message, kind) {
         if (!cargaEstado) return;
@@ -25,6 +26,23 @@ document.addEventListener('DOMContentLoaded', function () {
     function setArchivoSeleccionado(file) {
         if (!archivoSeleccionado) return;
         archivoSeleccionado.textContent = file ? `Archivo: ${file.name}` : '';
+    }
+
+    function iniciarEstadoProcesando() {
+        let dots = 0;
+        if (estadoInterval) clearInterval(estadoInterval);
+        setEstadoCarga('Procesando archivo, por favor espera', 'info');
+        estadoInterval = setInterval(() => {
+            dots = (dots + 1) % 4;
+            setEstadoCarga(`Procesando archivo, por favor espera${'.'.repeat(dots)}`, 'info');
+        }, 500);
+    }
+
+    function detenerEstadoProcesando() {
+        if (estadoInterval) {
+            clearInterval(estadoInterval);
+            estadoInterval = null;
+        }
     }
 
     function clearResumenCarga() {
@@ -47,16 +65,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const stats = result.stats || {};
         const dbStats = result.db_stats || {};
+        const duplicados = Number(stats.duplicados_eliminados || 0);
         const nombreArchivo = result.archivo ? safeText(result.archivo) : 'No disponible';
         const nombreCasos = result.archivo_casos ? safeText(result.archivo_casos) : 'No generado';
+        const alertaDuplicados = duplicados > 0
+            ? `<div class="carga-modal__alerta">⚠ Se detectaron y eliminaron ${duplicados} duplicados en este archivo.</div>`
+            : '';
 
         cargaResumen.innerHTML = `
+            ${alertaDuplicados}
             <ul>
                 <li><strong>Archivo generado:</strong> ${nombreArchivo}</li>
                 <li><strong>Casos revision:</strong> ${nombreCasos}</li>
                 <li><strong>Empleados:</strong> ${Number(stats.empleados_unicos || 0)}</li>
                 <li><strong>Registros:</strong> ${Number(stats.total_registros || 0)}</li>
-                <li><strong>Duplicados eliminados:</strong> ${Number(stats.duplicados_eliminados || 0)}</li>
+                <li><strong>Duplicados eliminados:</strong> ${duplicados}</li>
                 <li><strong>Estados inferidos:</strong> ${Number(stats.estados_inferidos || 0)}</li>
                 <li><strong>BD nuevos:</strong> ${Number(dbStats.creados || 0)} | <strong>existentes:</strong> ${Number(dbStats.existentes || 0)} | <strong>errores:</strong> ${Number(dbStats.errores || 0)}</li>
             </ul>
@@ -79,6 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!cargaModal) return;
         cargaModal.classList.remove('carga-modal--open');
         cargaModal.setAttribute('aria-hidden', 'true');
+        detenerEstadoProcesando();
         selectedFile = null;
         if (fileInput) fileInput.value = '';
         if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
@@ -126,30 +150,47 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
-        setEstadoCarga('Procesando archivo, por favor espera...', 'info');
+        iniciarEstadoProcesando();
         clearResumenCarga();
 
         const formData = new FormData();
         formData.append('archivo', selectedFile);
         formData.append('usar_maestro', 'true');
+        let timeoutId = null;
 
         try {
+            const controller = new AbortController();
+            timeoutId = setTimeout(() => controller.abort(), 300000);
             const response = await fetch(AREA_CONFIG.apiProcesar, {
                 method: 'POST',
                 body: formData,
+                signal: controller.signal,
             });
+            clearTimeout(timeoutId);
 
-            const result = await response.json();
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (_e) {
+                throw new Error('El servidor respondió con un formato no esperado.');
+            }
 
             if (!response.ok || !result.success) {
                 throw new Error(result.error || 'Error durante el procesamiento.');
             }
 
-            setEstadoCarga('Archivo procesado correctamente.', 'success');
-            mostrarResumenCarga(result);
             renderizarDashboard(result, AREA_CONFIG);
+            setEstadoCarga('✔ Archivo procesado correctamente.', 'success');
+            setTimeout(() => cerrarModalCarga(), 1200);
         } catch (error) {
-            setEstadoCarga(error.message || 'Error de conexion con el servidor.', 'error');
+            if (error && error.name === 'AbortError') {
+                setEstadoCarga('El procesamiento tardó demasiado (timeout de 5 minutos). Intenta con un archivo más pequeño o revisa logs.', 'error');
+            } else {
+                setEstadoCarga(error.message || 'Error de conexion con el servidor.', 'error');
+            }
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+            detenerEstadoProcesando();
             if (btnProcesarArchivo) btnProcesarArchivo.disabled = false;
         }
     }

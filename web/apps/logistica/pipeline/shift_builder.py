@@ -5,13 +5,13 @@ Empareja entradas con salidas y construye turnos completos
 
 import pandas as pd
 from datetime import datetime, timedelta
-import config
-from src.logger import logger
+from . import config
+from .logger import logger
 
 
 class ShiftBuilder:
     """Construye turnos a partir de marcaciones"""
-    
+
     def __init__(self):
         """Inicializa el constructor de turnos"""
         self.turnos = []
@@ -39,7 +39,7 @@ class ShiftBuilder:
     def _horas_entre(self, inicio, fin):
         """Calcula horas entre dos datetimes."""
         return (fin - inicio).total_seconds() / 3600
-    
+
     def es_turno_nocturno(self, fecha_hora_entrada):
         """
         Determina si un turno es nocturno basándose en hora de entrada
@@ -57,14 +57,14 @@ class ShiftBuilder:
             # Es un número (hora)
             hora_decimal = fecha_hora_entrada
         return hora_decimal >= config.HORA_INICIO_TURNO_NOCTURNO
-    
+
     def construir_turnos_empleado(self, df_empleado):
         """
         Construye turnos para un empleado específico
-        
+
         Args:
             df_empleado: DataFrame con marcaciones del empleado
-            
+
         Returns:
             Lista de dict con turnos construidos
         """
@@ -72,18 +72,18 @@ class ShiftBuilder:
         df_emp = df_empleado.sort_values('FECHA_HORA').reset_index(drop=True)
         codigo_empleado = df_emp.iloc[0]['CODIGO'] if len(df_emp) > 0 else None
         aplicar_castigo_vigilante = self._es_vigilante_castigo(codigo_empleado)
-        
+
         i = 0
         while i < len(df_emp):
             registro = df_emp.iloc[i]
-            
+
             # Si es una entrada
             if registro['ESTADO'] == 'Entrada':
                 entrada = registro
                 entrada_fecha_hora = entrada['FECHA_HORA']
                 entrada_hora = entrada_fecha_hora.hour
                 castigo_marcacion_diurna = False
-                
+
                 # Buscar la salida correspondiente
                 salida = None
                 salida_idx = None
@@ -145,19 +145,19 @@ class ShiftBuilder:
                                 salida_idx = j
                                 salida_corregida = True
                             break
-                
+
                 # Construir turno
                 if salida is not None:
                     # Turno completo
                     salida_fecha_hora = salida['FECHA_HORA']
                     horas_laboradas = (salida_fecha_hora - entrada_fecha_hora).total_seconds() / 3600
-                    
+
                     # Determinar fecha del turno (fecha de entrada)
                     fecha_turno = entrada_fecha_hora.date()
-                    
+
                     # Determinar si es nocturno
                     es_nocturno = False if castigo_marcacion_diurna else self.es_turno_nocturno(entrada_fecha_hora)
-                    
+
                     turno = {
                         'codigo': entrada['CODIGO'],
                         'nombre': entrada['NOMBRE'],
@@ -174,12 +174,12 @@ class ShiftBuilder:
                         'nocturno_prospectivo': False,
                         'salida_estandar_nocturna': False
                     }
-                    
+
                     turnos_empleado.append(turno)
-                    
+
                     # Saltar a después de la salida
                     i = salida_idx + 1
-                    
+
                 else:
                     # Entrada sin salida
                     fecha_turno = entrada_fecha_hora.date()
@@ -216,7 +216,7 @@ class ShiftBuilder:
                         turnos_empleado.append(turno)
                         i += 1
                         continue
-                     
+
                     turno = {
                         'codigo': entrada['CODIGO'],
                         'nombre': entrada['NOMBRE'],
@@ -233,27 +233,27 @@ class ShiftBuilder:
                         'nocturno_prospectivo': False,
                         'salida_estandar_nocturna': False
                     }
-                    
+
                     turnos_empleado.append(turno)
                     i += 1
-            
+
             elif registro['ESTADO'] == 'Salida':
                 # Salida sin entrada previa
                 salida_fecha_hora = registro['FECHA_HORA']
-                
+
                 # Verificar si puede ser parte de un turno nocturno
                 # (salida en madrugada sin entrada en el mismo día)
                 if salida_fecha_hora.hour < 10:
                     # Buscar si hay entrada del día anterior
                     fecha_anterior = salida_fecha_hora.date() - timedelta(days=1)
-                    
+
                     # Buscar entrada en turnos ya construidos
                     entrada_previa = None
                     for turno_prev in reversed(turnos_empleado):
                         if turno_prev['fecha'] == fecha_anterior and turno_prev['salida'] is None:
                             entrada_previa = turno_prev
                             break
-                    
+
                     if entrada_previa:
                         # Actualizar turno previo con esta salida
                         entrada_previa['salida'] = salida_fecha_hora
@@ -263,11 +263,11 @@ class ShiftBuilder:
                         entrada_previa['salida_inferida'] = registro.get('ESTADO_INFERIDO', False)
                         i += 1
                         continue
-                
+
                 # Salida huérfana
                 # Asignar a la fecha de la salida
                 fecha_turno = salida_fecha_hora.date()
-                
+
                 turno = {
                     'codigo': registro['CODIGO'],
                     'nombre': registro['NOMBRE'],
@@ -283,14 +283,14 @@ class ShiftBuilder:
                     'castigo_marcacion_diurna': False,
                     'nocturno_prospectivo': False
                 }
-                
+
                 turnos_empleado.append(turno)
                 i += 1
-            
+
             else:
                 # Estado indefinido u otro
                 i += 1
-        
+
         # Post-procesamiento: parear entradas PM incompletas con registros AM del día siguiente
         indices_a_eliminar = set()
         for idx_t, turno_t in enumerate(turnos_empleado):
@@ -300,10 +300,10 @@ class ShiftBuilder:
                     and turno_t['entrada'] is not None
                     and turno_t['salida'] is None
                     and self.es_turno_nocturno(turno_t['entrada'])):
-                
+
                 encontro_marca_real = False
                 fecha_siguiente = turno_t['fecha'] + timedelta(days=1)
-                
+
                 # --- PASO 1: Buscar marca real en la mañana (Azul) ---
                 for idx_s, turno_s in enumerate(turnos_empleado):
                     if idx_s in indices_a_eliminar or idx_s == idx_t:
@@ -320,50 +320,50 @@ class ShiftBuilder:
                         turno_t['completo'] = True
                         turno_t['es_nocturno'] = True
                         turno_t['nocturno_prospectivo'] = True
-                        turno_t['salida_estandar_nocturna'] = False # Azul estándar
+                        turno_t['salida_estandar_nocturna'] = False  # Azul estándar
                         indices_a_eliminar.add(idx_s)
                         encontro_marca_real = True
                         break
-                
+
                 # --- PASO 2: Si NO hubo marca real, inferir 6 AM (Morado) ---
                 if not encontro_marca_real:
                     salida_inferida = datetime.combine(
-                        fecha_siguiente, 
+                        fecha_siguiente,
                         datetime.min.time()
                     ).replace(hour=config.HORA_SALIDA_ESTANDAR_NOCTURNA)
-                    
+
                     horas = (salida_inferida - turno_t['entrada']).total_seconds() / 3600
                     turno_t['salida'] = salida_inferida
                     turno_t['horas'] = round(horas, 2)
                     turno_t['completo'] = True
                     turno_t['es_nocturno'] = True
-                    turno_t['salida_estandar_nocturna'] = True # Morado
+                    turno_t['salida_estandar_nocturna'] = True  # Morado
                     turno_t['salida_inferida'] = True
 
         if indices_a_eliminar:
             turnos_empleado = [t for idx, t in enumerate(turnos_empleado) if idx not in indices_a_eliminar]
 
         return turnos_empleado
-    
+
     def construir_turnos(self, df):
         """
         Construye turnos para todos los empleados
-        
+
         Args:
             df: DataFrame con marcaciones limpias
-            
+
         Returns:
             DataFrame con turnos construidos
         """
         logger.log_fase("CONSTRUCCIÓN DE TURNOS")
-        
+
         todos_los_turnos = []
-        
+
         # Procesar por empleado
         for codigo in df['CODIGO'].unique():
             df_empleado = df[df['CODIGO'] == codigo].copy()
             turnos_empleado = self.construir_turnos_empleado(df_empleado)
-            
+
             # Registrar en log
             for turno in turnos_empleado:
                 logger.log_turno(
@@ -374,33 +374,33 @@ class ShiftBuilder:
                     horas=turno['horas'],
                     es_completo=turno['completo']
                 )
-            
+
             todos_los_turnos.extend(turnos_empleado)
-        
+
         # Convertir a DataFrame
         df_turnos = pd.DataFrame(todos_los_turnos)
-        
+
         logger.info(config.MENSAJES['turnos_construidos'])
         logger.info(f"Total turnos: {len(df_turnos)}")
         logger.info(f"Turnos completos: {df_turnos['completo'].sum()}")
         logger.info(f"Turnos incompletos: {(~df_turnos['completo']).sum()}")
-        
+
         self.turnos = todos_los_turnos
-        
+
         return df_turnos
-    
+
     def obtener_resumen(self):
         """
         Obtiene resumen de la construcción de turnos
-        
+
         Returns:
             Dict con estadísticas
         """
         if not self.turnos:
             return {'total_turnos': 0}
-        
+
         df_turnos = pd.DataFrame(self.turnos)
-        
+
         return {
             'total_turnos': len(self.turnos),
             'turnos_completos': df_turnos['completo'].sum(),
