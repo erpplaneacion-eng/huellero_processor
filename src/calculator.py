@@ -326,29 +326,24 @@ class Calculator:
             
         return df_resultado
     
-    def agregar_datos_maestro(self, df_resultado, ruta_maestro):
+    def agregar_datos_maestro(self, df_resultado, df_maestro, df_cargos=None):
         """
-        Agrega datos del archivo maestro de empleados, incluyendo su cargo
+        Agrega datos del maestro de empleados al resultado, incluyendo cargo
         y límite de horas por día.
-        
+
         Args:
             df_resultado: DataFrame con resultados
-            ruta_maestro: Ruta al archivo maestro
-            
+            df_maestro: DataFrame con empleados (columnas: CODIGO, NOMBRE, DOCUMENTO, CARGO)
+            df_cargos: DataFrame con cargos (columnas: id_cargo, cargo, horas_dia,
+                       horas_semana, numero_colaboradores). Opcional.
+
         Returns:
             DataFrame con datos de maestro y validación de horas
         """
         try:
-            logger.info(f"Cargando archivo maestro y configuración de cargos desde: {ruta_maestro}")
-            
-            # Leer las hojas del archivo maestro
-            df_maestro = pd.read_excel(ruta_maestro, sheet_name='empleados_ejemplo')
-            
-            # Intentar cargar hojas adicionales si existen, de lo contrario crear DataFrames vacíos
-            try:
-                df_cargos = pd.read_excel(ruta_maestro, sheet_name='horas_cargos')
-            except ValueError:
-                logger.warning("Hoja 'horas_cargos' no encontrada en archivo maestro.")
+            logger.info("Cargando datos de maestro desde base de datos")
+
+            if df_cargos is None:
                 df_cargos = pd.DataFrame(columns=['id_cargo', 'cargo', 'horas_dia', 'horas_semana', 'numero_colaboradores'])
                 
             # Renombrar columnas si es necesario para df_maestro
@@ -471,8 +466,6 @@ class Calculator:
             
             logger.info(f"✅ Datos de maestro agregados (incluyendo cargos y límites de horas)")
             
-        except FileNotFoundError:
-            logger.warning(f"Archivo maestro no encontrado: {ruta_maestro}")
         except Exception as e:
             logger.warning(f"Error al cargar maestro: {str(e)}")
         

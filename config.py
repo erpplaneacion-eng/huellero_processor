@@ -47,10 +47,15 @@ HORA_FIN_AM = 12    # 11:59
 HORA_INICIO_PM = 12  # 12:00
 HORA_FIN_PM = 24     # 23:59
 
-# Horarios para inferencia de estados
+# Horarios para inferencia de estados (fallback cuando no hay horario de cargo)
 # Si una marcación sin estado ocurre en estos rangos, se infiere como:
 RANGO_INFERENCIA_ENTRADA = [(3, 11)]   # 03:00 a 11:00 -> probablemente ENTRADA
 RANGO_INFERENCIA_SALIDA = [(14, 21)]   # 14:00 a 21:00 -> probablemente SALIDA
+
+# Tolerancia para inferencia por horario de cargo (en minutos por extremo)
+# Si la desviación del mejor turno supera este valor, se descarta la inferencia
+# y se usa el fallback (rangos globales arriba)
+TOLERANCIA_HORARIO_MIN = 90  # 1.5 horas por extremo
 
 # Definición de turno nocturno (hora de inicio)
 HORA_INICIO_TURNO_NOCTURNO = 20.0  # A partir de las 20:00 se considera inicio de nocturno

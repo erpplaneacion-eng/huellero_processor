@@ -53,19 +53,85 @@ def obtener_archivo_entrada(ruta_especifica=None):
     return archivo_mas_reciente
 
 
-def obtener_archivo_maestro():
+def cargar_horarios_por_codigo_excel():
     """
-    Obtiene ruta al archivo maestro de empleados
-    
+    Lee el Excel maestro y retorna dict {codigo: [(entrada_min, salida_min), ...]}
+    para usarlo en la inferencia de estados por horario de cargo.
+    """
+    import pandas as pd
+
+    ruta = os.path.join(config.DIR_MAESTRO, config.ARCHIVO_MAESTRO)
+    if not os.path.exists(ruta):
+        return {}
+
+    try:
+        xl = pd.ExcelFile(ruta)
+        if 'empleados_ejemplo' not in xl.sheet_names or 'cargos_horarios' not in xl.sheet_names or 'horarios' not in xl.sheet_names:
+            return {}
+
+        df_emp = pd.read_excel(xl, sheet_name='empleados_ejemplo')
+        df_ch  = pd.read_excel(xl, sheet_name='cargos_horarios')
+        df_h   = pd.read_excel(xl, sheet_name='horarios')
+
+        # Construir lookup horario_id → (entrada_min, salida_min)
+        horario_lookup = {}
+        for _, fila in df_h.iterrows():
+            def _parse(t):
+                partes = str(t).split(':')
+                return int(partes[0]) * 60 + int(partes[1])
+            horario_lookup[int(fila['id_horario'])] = (
+                _parse(fila['hora_inicio']),
+                _parse(fila['hora_fin']),
+            )
+
+        # Construir lookup cargo → lista de turnos
+        cargo_turnos = {}
+        for _, fila in df_ch.iterrows():
+            cargo_id   = str(fila['id_cargo']).strip()
+            horario_id = int(fila['id_horario'])
+            if horario_id in horario_lookup:
+                cargo_turnos.setdefault(cargo_id, []).append(horario_lookup[horario_id])
+
+        # Mapear codigo empleado → turnos de su cargo
+        horarios_por_codigo = {}
+        for _, fila in df_emp.iterrows():
+            try:
+                codigo   = int(fila['CODIGO'])
+                cargo_id = str(fila['CARGO']).strip()
+                if cargo_id in cargo_turnos:
+                    horarios_por_codigo[codigo] = cargo_turnos[cargo_id]
+            except (ValueError, TypeError):
+                continue
+
+        return horarios_por_codigo
+
+    except Exception as e:
+        print(f"⚠️  No se pudieron cargar horarios del maestro: {e}")
+        return {}
+
+
+def cargar_maestro_desde_excel():
+    """
+    Lee el archivo Excel maestro y retorna DataFrames para el calculator
+    y el excel_generator.
+
     Returns:
-        Ruta al archivo maestro o None
+        (df_empleados, df_cargos, df_conceptos) — cualquiera puede ser None
+        si la hoja no existe o el archivo no se encuentra.
     """
+    import pandas as pd
+
     ruta_maestro = os.path.join(config.DIR_MAESTRO, config.ARCHIVO_MAESTRO)
-    
-    if os.path.exists(ruta_maestro):
-        return ruta_maestro
-    
-    return None
+    if not os.path.exists(ruta_maestro):
+        return None, None, None
+
+    xl = pd.ExcelFile(ruta_maestro)
+
+    df_empleados = pd.read_excel(xl, sheet_name='empleados_ejemplo') if 'empleados_ejemplo' in xl.sheet_names else None
+    df_cargos = pd.read_excel(xl, sheet_name='horas_cargos') if 'horas_cargos' in xl.sheet_names else None
+    df_conceptos = pd.read_excel(xl, sheet_name='conceptos') if 'conceptos' in xl.sheet_names else None
+
+    return df_empleados, df_cargos, df_conceptos
 
 
 def procesar_huellero(ruta_archivo, usar_maestro=True):
@@ -88,7 +154,8 @@ def procesar_huellero(ruta_archivo, usar_maestro=True):
         
         # ===== FASE 2: INFERENCIA DE ESTADOS =====
         inference = StateInference()
-        df_con_estados = inference.inferir_estados(df_limpio)
+        horarios_por_codigo = cargar_horarios_por_codigo_excel() if usar_maestro else {}
+        df_con_estados = inference.inferir_estados(df_limpio, horarios_por_codigo)
         
         # ===== FASE 3: CONSTRUCCIÓN DE TURNOS =====
         builder = ShiftBuilder()
@@ -98,23 +165,24 @@ def procesar_huellero(ruta_archivo, usar_maestro=True):
         calculator = Calculator()
         df_resultado = calculator.calcular_metricas(df_turnos, df_con_estados)
         
-        # Agregar datos de maestro si está disponible
+        # Agregar datos de maestro desde Excel
+        df_conceptos = None
         if usar_maestro:
-            ruta_maestro = obtener_archivo_maestro()
-            if ruta_maestro:
-                df_resultado = calculator.agregar_datos_maestro(df_resultado, ruta_maestro)
+            df_empleados, df_cargos, df_conceptos = cargar_maestro_desde_excel()
+            if df_empleados is not None:
+                df_resultado = calculator.agregar_datos_maestro(df_resultado, df_empleados, df_cargos)
             else:
                 logger.warning("Archivo maestro no encontrado - documentos quedarán vacíos")
-        
+
         # ===== FASE 5: GENERACIÓN DE EXCEL =====
         generator = ExcelGenerator()
-        
+
         # Preparar estadísticas
         stats_logger = logger.obtener_estadisticas()
         stats_cleaner = cleaner.obtener_resumen()
         stats_inference = inference.obtener_resumen()
         stats_builder = builder.obtener_resumen()
-        
+
         stats = {
             'empleados_unicos': df_resultado['CODIGO COLABORADOR'].nunique(),
             'total_registros': len(df_resultado),
@@ -125,9 +193,9 @@ def procesar_huellero(ruta_archivo, usar_maestro=True):
             'errores': stats_logger.get('errores', 0),
             'advertencias': stats_logger.get('advertencias', 0)
         }
-        
+
         # Generar Excel
-        ruta_salida = generator.generar_excel(df_resultado, stats)
+        ruta_salida = generator.generar_excel(df_resultado, stats, df_conceptos=df_conceptos)
         
         # Generar casos especiales
         generator.generar_casos_especiales(df_resultado)
@@ -218,9 +286,8 @@ Ejemplos de uso:
             archivo = archivos[seleccion]
             
             # Preguntar por maestro
-            usar_maestro = True
-            ruta_maestro = obtener_archivo_maestro()
-            if ruta_maestro:
+            ruta_maestro_existe = os.path.exists(os.path.join(config.DIR_MAESTRO, config.ARCHIVO_MAESTRO))
+            if ruta_maestro_existe:
                 respuesta = input("\n¿Usar archivo maestro de empleados? (S/n): ").strip().lower()
                 usar_maestro = respuesta != 'n'
             else:

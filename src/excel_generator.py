@@ -316,14 +316,16 @@ class ExcelGenerator:
         except Exception as e:
             logger.error(f"Error al generar hoja Resumen por Cargo: {str(e)}")
     
-    def generar_excel(self, df_resultado, stats=None):
+    def generar_excel(self, df_resultado, stats=None, df_conceptos=None):
         """
         Genera archivo Excel con los resultados
-        
+
         Args:
             df_resultado: DataFrame con resultados finales
             stats: Dict con estadísticas (opcional)
-            
+            df_conceptos: DataFrame con columna 'observaciones' para el dropdown
+                          de OBSERVACIONES_1. Si es None se omite la hoja.
+
         Returns:
             Ruta al archivo generado
         """
@@ -345,14 +347,11 @@ class ExcelGenerator:
             self.crear_hoja_cargos(writer, df_resultado)
             
             # Hoja de Conceptos (para validación de datos en OBSERVACIONES_1)
-            try:
-                ruta_maestro = os.path.join(config.DIR_MAESTRO, config.ARCHIVO_MAESTRO)
-                df_conceptos = pd.read_excel(ruta_maestro, sheet_name='conceptos')
-                # Solo guardar la columna de observaciones para la lista desplegable
-                if 'observaciones' in df_conceptos.columns:
+            if df_conceptos is not None and 'observaciones' in df_conceptos.columns:
+                try:
                     df_conceptos[['observaciones']].dropna().to_excel(writer, sheet_name='Conceptos', index=False)
-            except Exception as e:
-                logger.warning(f"No se pudo crear hoja de Conceptos: {str(e)}")
+                except Exception as e:
+                    logger.warning(f"No se pudo crear hoja de Conceptos: {str(e)}")
             
             # Hoja de resumen
             if stats:
