@@ -119,12 +119,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.success) {
                 mostrarResultadoExito(result);
             } else {
-                mostrarResultadoError(result.error);
+                mostrarResultadoError(result.error || 'Error desconocido en el servidor');
             }
 
         } catch (error) {
-            console.error('Error:', error);
-            mostrarResultadoError('Error de conexión con el servidor');
+            console.error('Error al procesar:', error);
+            mostrarResultadoError('Error: ' + (error.message || 'Error de conexión con el servidor'));
+        } finally {
+            // Garantizar que el spinner de progreso siempre se oculte,
+            // incluso si hubo una excepción inesperada en el bloque catch
+            progressSection.classList.remove('active');
         }
     }
 
@@ -136,7 +140,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========== RESULTS ==========
     function mostrarResultadoExito(result) {
         progressSection.classList.remove('active');
-        renderizarDashboard(result, AREA_CONFIG);
+        try {
+            renderizarDashboard(result, AREA_CONFIG);
+        } catch (e) {
+            console.error('Error al renderizar el dashboard:', e);
+            mostrarResultadoError('Error al mostrar los resultados: ' + e.message);
+        }
     }
 
     function mostrarResultadoError(error) {

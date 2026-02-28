@@ -53,6 +53,27 @@ def obtener_archivo_entrada(ruta_especifica=None):
     return archivo_mas_reciente
 
 
+def cargar_codigos_excluidos():
+    """
+    Intenta cargar desde la BD PostgreSQL los códigos de empleados excluidos.
+    Si no hay conexión disponible, retorna un set vacío.
+    """
+    try:
+        import django
+        import os as _os
+        _os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'huellero_web.settings')
+        import sys as _sys
+        _sys.path.insert(0, str(Path(__file__).resolve().parent / 'web'))
+        django.setup()
+        from apps.logistica.models import Empleado
+        codigos = set(Empleado.objects.filter(excluido=True).values_list('codigo', flat=True))
+        if codigos:
+            print(f"⚠️  Empleados excluidos del análisis: {len(codigos)}")
+        return codigos
+    except Exception:
+        return set()
+
+
 def cargar_horarios_por_codigo_excel():
     """
     Lee el Excel maestro y retorna dict {codigo: [(entrada_min, salida_min), ...]}
@@ -150,7 +171,8 @@ def procesar_huellero(ruta_archivo, usar_maestro=True):
     try:
         # ===== FASE 1: LIMPIEZA DE DATOS =====
         cleaner = DataCleaner()
-        df_limpio = cleaner.procesar(ruta_archivo)
+        codigos_excluidos = cargar_codigos_excluidos()
+        df_limpio = cleaner.procesar(ruta_archivo, codigos_excluidos)
         
         # ===== FASE 2: INFERENCIA DE ESTADOS =====
         inference = StateInference()

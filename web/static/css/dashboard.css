@@ -279,6 +279,29 @@
 .fila--naranja { background: #FFC7CE; }
 .fila--amarillo { background: #FFEB9C; }
 
+/* ---- Columna Obs. Manual ---- */
+.obs1-celda { white-space: normal; min-width: 160px; }
+
+.obs1-select {
+    width: 100%;
+    min-width: 150px;
+    max-width: 260px;
+    padding: 4px 6px;
+    border: 1px solid rgba(0,0,0,0.2);
+    border-radius: 4px;
+    background: rgba(255,255,255,0.75);
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.4s ease;
+}
+
+.obs1-select:focus { outline: 2px solid #3a4d8f; }
+
+.obs1-nobd {
+    color: #aaa;
+    font-size: 12px;
+}
+
 /* ---- Leyenda ---- */
 .dashboard-leyenda {
     display: flex;

@@ -184,10 +184,30 @@ function calcularStatsEmpleado(registros) {
 
 /* ===== Tabla de registros ===== */
 function renderizarTablaRegistros(registros) {
+    const conceptos = (_dashResult && _dashResult.conceptos) ? _dashResult.conceptos : [];
+    const opcionesHTML = conceptos.map(c =>
+        `<option value="${_escaparAttr(c)}">${_truncar(c, 60)}</option>`
+    ).join('');
+
     const filas = registros.map(reg => {
         const clase = determinarClaseFila(reg.observacion);
         const horas = reg.horas !== null && reg.horas !== undefined ? formatearHoras(reg.horas) : '—';
         const obs = reg.observacion || '—';
+        const tieneId = reg.id !== null && reg.id !== undefined;
+        const obs1Val = reg.obs1 || '';
+
+        const selectHTML = tieneId
+            ? `<select class="obs1-select"
+                        data-id="${reg.id}"
+                        onchange="guardarObs1(this)"
+                        title="${_escaparAttr(obs1Val)}">
+                    <option value="">— Sin observación —</option>
+                    ${conceptos.map(c =>
+                        `<option value="${_escaparAttr(c)}"${c === obs1Val ? ' selected' : ''}>${_truncar(c, 60)}</option>`
+                    ).join('')}
+               </select>`
+            : `<span class="obs1-nobd">—</span>`;
+
         return `
             <tr class="fila ${clase}">
                 <td>${reg.fecha}</td>
@@ -196,6 +216,7 @@ function renderizarTablaRegistros(registros) {
                 <td>${reg.salida || '—'}</td>
                 <td>${horas}</td>
                 <td title="${obs}">${_truncar(obs, 55)}</td>
+                <td class="obs1-celda">${selectHTML}</td>
             </tr>
         `;
     }).join('');
@@ -210,11 +231,46 @@ function renderizarTablaRegistros(registros) {
                     <th>Salida</th>
                     <th>Total Horas</th>
                     <th>Observación</th>
+                    <th>Obs. Manual</th>
                 </tr>
             </thead>
             <tbody>${filas}</tbody>
         </table>
     `;
+}
+
+/* ===== Guardar OBSERVACIONES_1 vía AJAX ===== */
+function guardarObs1(selectEl) {
+    const registroId = selectEl.dataset.id;
+    const obs1 = selectEl.value;
+    const url = _dashAreaConfig.apiGuardarObs1;
+
+    selectEl.disabled = true;
+    selectEl.style.opacity = '0.6';
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registro_id: parseInt(registroId, 10), obs1: obs1 })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            selectEl.style.background = '#C6EFCE';
+            setTimeout(() => { selectEl.style.background = ''; }, 1200);
+        } else {
+            selectEl.style.background = '#FFC7CE';
+            console.error('Error al guardar obs1:', data.error);
+        }
+    })
+    .catch(err => {
+        selectEl.style.background = '#FFC7CE';
+        console.error('Error de red al guardar obs1:', err);
+    })
+    .finally(() => {
+        selectEl.disabled = false;
+        selectEl.style.opacity = '';
+    });
 }
 
 /* ===== Mapeo observacion → clase CSS ===== */
@@ -288,6 +344,17 @@ function _renderizarLeyenda() {
 function _truncar(texto, max) {
     if (!texto) return '';
     return texto.length > max ? texto.slice(0, max) + '…' : texto;
+}
+
+/* ===== Util: escapar caracteres especiales en atributos HTML ===== */
+function _escaparAttr(texto) {
+    if (!texto) return '';
+    return String(texto)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 /* ===== PDF: descarga informe de novedades ===== */

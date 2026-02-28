@@ -14,6 +14,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 
+from .models import RegistroAsistencia
 from .processor import HuelleroProcessor
 
 
@@ -82,6 +83,33 @@ class ProcesarView(View):
                 'success': False,
                 'error': f'Error durante el procesamiento: {str(e)}'
             }, status=500)
+
+
+@method_decorator([login_required, csrf_exempt], name='dispatch')
+class GuardarObs1View(View):
+    """
+    Guarda el valor de OBSERVACIONES_1 seleccionado por el usuario en el dashboard.
+    POST /logistica/api/registros/obs1/
+    Body JSON: {"registro_id": 5, "obs1": "texto seleccionado"}
+    """
+
+    def post(self, request):
+        import json
+        try:
+            data = json.loads(request.body)
+            registro_id = int(data.get('registro_id', 0))
+            obs1 = str(data.get('obs1', '')).strip()
+
+            registro = RegistroAsistencia.objects.get(pk=registro_id)
+            registro.observaciones_1 = obs1
+            registro.save(update_fields=['observaciones_1', 'actualizado_en'])
+
+            return JsonResponse({'ok': True})
+
+        except RegistroAsistencia.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Registro no encontrado'}, status=404)
+        except Exception as e:
+            return JsonResponse({'ok': False, 'error': str(e)}, status=500)
 
 
 @method_decorator(login_required, name='dispatch')

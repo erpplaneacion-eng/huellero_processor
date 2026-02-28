@@ -36,6 +36,98 @@ class HuelleroProcessor:
         self.maestro_dir = PROJECT_ROOT / 'data' / 'maestro'
         self.output_dir = PROJECT_ROOT / 'data' / 'output'
 
+    def _guardar_registros_en_db(self, df_resultado):
+        """
+        Guarda df_resultado en la tabla RegistroAsistencia.
+        Usa una única transacción para minimizar la latencia de red con PostgreSQL.
+        Si ya existe un registro (codigo, fecha, hora_ingreso) no lo duplica.
+
+        Returns:
+            dict {(codigo, fecha_str, hora_ingreso): {'id', 'obs1'}}
+        """
+        import math
+        from datetime import datetime
+        from django.db import transaction
+        from apps.logistica.models import RegistroAsistencia
+
+        def _sfloat(v):
+            try:
+                f = float(v)
+                return None if (math.isnan(f) or math.isinf(f)) else f
+            except (TypeError, ValueError):
+                return None
+
+        # Preparar lista de dicts antes de tocar la DB
+        filas = []
+        for _, row in df_resultado.iterrows():
+            try:
+                fecha_str = str(row.get('FECHA', ''))
+                fecha = datetime.strptime(fecha_str, '%d/%m/%Y').date()
+                codigo = int(float(row.get('CODIGO COLABORADOR', 0)))
+                hora_ingreso = str(row.get('HORA DE INGRESO', '') or '')
+                filas.append({
+                    'codigo':         codigo,
+                    'fecha':          fecha,
+                    'fecha_str':      fecha_str,
+                    'hora_ingreso':   hora_ingreso,
+                    'nombre':         str(row.get('NOMBRE COMPLETO DEL COLABORADOR', '') or ''),
+                    'documento':      str(row.get('DOCUMENTO DEL COLABORADOR', '') or ''),
+                    'cargo':          str(row.get('CARGO', '') or ''),
+                    'dia':            str(row.get('DIA', '') or ''),
+                    'marcaciones_am': int(row.get('# MARCACIONES AM', 0) or 0),
+                    'marcaciones_pm': int(row.get('# MARCACIONES PM', 0) or 0),
+                    'hora_salida':    str(row.get('HORA DE SALIDA', '') or ''),
+                    'total_horas':    _sfloat(row.get('TOTAL HORAS LABORADAS')),
+                    'limite_horas_dia': str(row.get('LÍMITE HORAS DÍA', '') or ''),
+                    'observacion':    str(row.get('OBSERVACION', '') or ''),
+                    'observaciones_1': str(row.get('OBSERVACIONES_1', '') or ''),
+                })
+            except Exception as e:
+                logger.warning(f"Error preparando fila para BD: {e}")
+
+        lookup = {}
+        creados = existentes = errores = 0
+
+        # Una sola transacción para todos los get_or_create → reduce latencia de red
+        with transaction.atomic():
+            for f in filas:
+                try:
+                    obj, creado = RegistroAsistencia.objects.get_or_create(
+                        codigo=f['codigo'],
+                        fecha=f['fecha'],
+                        hora_ingreso=f['hora_ingreso'],
+                        defaults={k: v for k, v in f.items()
+                                  if k not in ('codigo', 'fecha', 'hora_ingreso', 'fecha_str')},
+                    )
+                    lookup[(f['codigo'], f['fecha_str'], f['hora_ingreso'])] = {
+                        'id': obj.id,
+                        'obs1': obj.observaciones_1,
+                    }
+                    if creado:
+                        creados += 1
+                    else:
+                        existentes += 1
+                except Exception as e:
+                    errores += 1
+                    logger.warning(f"Error guardando registro en BD: {e}")
+
+        logger.info(f"Registros BD — nuevos: {creados} | ya existían: {existentes} | errores: {errores}")
+        return lookup
+
+    def _cargar_codigos_excluidos(self):
+        """Retorna un set con los códigos de empleados marcados como excluidos en la DB."""
+        try:
+            from apps.logistica.models import Empleado
+            codigos = set(
+                Empleado.objects.filter(excluido=True).values_list('codigo', flat=True)
+            )
+            if codigos:
+                logger.info(f"Empleados excluidos del análisis: {len(codigos)} códigos")
+            return codigos
+        except Exception as e:
+            logger.warning(f"No se pudo cargar lista de excluidos: {e}")
+            return set()
+
     def _cargar_horarios_por_codigo(self):
         """
         Consulta la DB y retorna un dict {codigo_empleado: [(entrada_min, salida_min), ...]}
@@ -129,7 +221,8 @@ class HuelleroProcessor:
         try:
             # ===== FASE 1: LIMPIEZA DE DATOS =====
             cleaner = DataCleaner()
-            df_limpio = cleaner.procesar(ruta_archivo)
+            codigos_excluidos = self._cargar_codigos_excluidos()
+            df_limpio = cleaner.procesar(ruta_archivo, codigos_excluidos)
 
             # ===== FASE 2: INFERENCIA DE ESTADOS =====
             inference = StateInference()
@@ -177,6 +270,9 @@ class HuelleroProcessor:
             # Generar casos especiales
             ruta_casos = generator.generar_casos_especiales(df_resultado)
 
+            # ===== GUARDAR EN BASE DE DATOS =====
+            db_lookup = self._guardar_registros_en_db(df_resultado)
+
             # ===== FIN DEL PROCESO =====
             logger.log_fin_proceso(exito=True)
 
@@ -184,8 +280,12 @@ class HuelleroProcessor:
             nombre_archivo = os.path.basename(ruta_salida)
             nombre_casos = os.path.basename(ruta_casos) if ruta_casos else None
 
-            # Serializar datos para el dashboard frontend
-            datos = self._serializar_datos(df_resultado)
+            # Serializar datos para el dashboard frontend (con IDs de BD)
+            datos = self._serializar_datos(df_resultado, db_lookup)
+
+            # Opciones de conceptos para el dropdown en el dashboard
+            from apps.logistica.models import Concepto
+            conceptos = list(Concepto.objects.values_list('observaciones', flat=True).order_by('observaciones'))
 
             return {
                 'success': True,
@@ -193,7 +293,8 @@ class HuelleroProcessor:
                 'archivo_casos': nombre_casos,
                 'stats': stats,
                 'area': self.area,
-                'datos': datos
+                'datos': datos,
+                'conceptos': conceptos,
             }
 
         except Exception as e:
@@ -201,7 +302,7 @@ class HuelleroProcessor:
             logger.log_fin_proceso(exito=False)
             raise
 
-    def _serializar_datos(self, df):
+    def _serializar_datos(self, df, db_lookup=None):
         """Agrupa el DataFrame por empleado para el dashboard frontend."""
         import pandas as pd
 
@@ -241,15 +342,22 @@ class HuelleroProcessor:
                     'cargo': _str_nonempty(row['CARGO']),
                     'registros': []
                 }
+            fecha_str   = _str_nonempty(row['FECHA'])
+            hora_ingreso = _str_nonempty(row['HORA DE INGRESO'])
+            db_key = (int(float(raw_codigo)), fecha_str, hora_ingreso)
+            db_info = (db_lookup or {}).get(db_key, {})
+
             empleados[codigo]['registros'].append({
-                'fecha': _str_nonempty(row['FECHA']),
-                'dia': _str_nonempty(row['DIA']),
-                'am': _int_safe(row['# MARCACIONES AM']),
-                'pm': _int_safe(row['# MARCACIONES PM']),
-                'ingreso': _str_nonempty(row['HORA DE INGRESO']),
-                'salida': _str_nonempty(row['HORA DE SALIDA']),
-                'horas': _float_safe(row['TOTAL HORAS LABORADAS']),
-                'limite': _str_nonempty(row['LÍMITE HORAS DÍA']),
+                'id':          db_info.get('id'),
+                'fecha':       fecha_str,
+                'dia':         _str_nonempty(row['DIA']),
+                'am':          _int_safe(row['# MARCACIONES AM']),
+                'pm':          _int_safe(row['# MARCACIONES PM']),
+                'ingreso':     hora_ingreso,
+                'salida':      _str_nonempty(row['HORA DE SALIDA']),
+                'horas':       _float_safe(row['TOTAL HORAS LABORADAS']),
+                'limite':      _str_nonempty(row['LÍMITE HORAS DÍA']),
                 'observacion': _str_nonempty(row['OBSERVACION']),
+                'obs1':        db_info.get('obs1', ''),
             })
         return list(empleados.values())

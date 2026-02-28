@@ -74,6 +74,10 @@ class Empleado(models.Model):
         related_name='empleados',
         db_column='cargo_id',
     )
+    excluido = models.BooleanField(
+        default=False,
+        help_text='Si está activo, este empleado se omite completamente del análisis de huellero.',
+    )
 
     class Meta:
         db_table = 'maestro_empleado'
@@ -82,6 +86,40 @@ class Empleado(models.Model):
 
     def __str__(self):
         return f"{self.nombre} (Cód: {self.codigo})"
+
+
+class RegistroAsistencia(models.Model):
+    """
+    Registro diario de asistencia generado al procesar un archivo de huellero.
+    Unique por (codigo, fecha, hora_ingreso) → evita duplicados al recargar el mismo Excel.
+    """
+    codigo        = models.IntegerField()
+    nombre        = models.CharField(max_length=200)
+    documento     = models.CharField(max_length=20, blank=True)
+    cargo         = models.CharField(max_length=200, blank=True)
+    fecha         = models.DateField()
+    dia           = models.CharField(max_length=20, blank=True)
+    marcaciones_am = models.SmallIntegerField(default=0)
+    marcaciones_pm = models.SmallIntegerField(default=0)
+    hora_ingreso  = models.CharField(max_length=10, blank=True)
+    hora_salida   = models.CharField(max_length=10, blank=True)
+    total_horas   = models.FloatField(null=True, blank=True)
+    limite_horas_dia = models.CharField(max_length=20, blank=True)
+    observacion   = models.CharField(max_length=500, blank=True)
+    observaciones_1 = models.CharField(max_length=500, blank=True, default='',
+                                       verbose_name='Observación manual')
+    creado_en     = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'registro_asistencia'
+        unique_together = ('codigo', 'fecha', 'hora_ingreso')
+        ordering = ['codigo', 'fecha', 'hora_ingreso']
+        verbose_name = 'Registro de Asistencia'
+        verbose_name_plural = 'Registros de Asistencia'
+
+    def __str__(self):
+        return f"{self.nombre} — {self.fecha}"
 
 
 class Concepto(models.Model):

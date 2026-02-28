@@ -106,7 +106,8 @@
         key: '{{ area_key }}',
         nombre: '{{ area.nombre }}',
         apiProcesar: '{% url "logistica:procesar" %}',
-        apiDescargar: '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', '')
+        apiDescargar: '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', ''),
+        apiGuardarObs1: '{% url "logistica:guardar_obs1" %}'
     };
 </script>
 <script src="{% static 'js/dashboard.js' %}"></script>

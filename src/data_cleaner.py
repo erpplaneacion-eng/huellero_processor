@@ -293,27 +293,37 @@ class DataCleaner:
             
         return df_corregido
 
-    def procesar(self, ruta_archivo):
+    def procesar(self, ruta_archivo, codigos_excluidos=None):
         """
-        Procesa completo: carga, limpia estructura y elimina duplicados
-        
+        Procesa completo: carga, limpia estructura y elimina duplicados.
+
         Args:
-            ruta_archivo: Ruta al archivo de entrada
-            
+            ruta_archivo: Ruta al archivo de entrada.
+            codigos_excluidos: set/list de códigos (int) de empleados que deben
+                               omitirse completamente del análisis. Opcional.
+
         Returns:
-            DataFrame limpio
+            DataFrame limpio sin los empleados excluidos.
         """
         df = self.cargar_archivo(ruta_archivo)
         df = self.limpiar_estructura(df)
-        
+
+        # Excluir empleados marcados en la BD
+        if codigos_excluidos:
+            antes = len(df)
+            df = df[~df['CODIGO'].isin(codigos_excluidos)].copy()
+            excluidos = antes - len(df)
+            if excluidos:
+                logger.info(f"Empleados excluidos del análisis: {excluidos} registros omitidos")
+
         # Autocorrección de estados erróneos
         df = self.autocorregir_estados_erroneos(df)
-        
+
         df = self.eliminar_duplicados(df)
-        
+
         logger.info(config.MENSAJES['limpieza_completa'])
         logger.info(f"Total registros limpios: {len(df)}")
-        
+
         return df
     
     def obtener_resumen(self):
