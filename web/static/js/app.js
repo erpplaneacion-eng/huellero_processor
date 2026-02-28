@@ -180,8 +180,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             renderizarDashboard(result, AREA_CONFIG);
+            mostrarResumenCarga(result);
             setEstadoCarga('✔ Archivo procesado correctamente.', 'success');
-            setTimeout(() => cerrarModalCarga(), 1200);
         } catch (error) {
             if (error && error.name === 'AbortError') {
                 setEstadoCarga('El procesamiento tardó demasiado (timeout de 5 minutos). Intenta con un archivo más pequeño o revisa logs.', 'error');
