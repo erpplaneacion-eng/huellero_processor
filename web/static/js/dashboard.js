@@ -76,7 +76,7 @@ function _renderizarHeader(stats, nombreArchivo, urlDescarga, urlCasos) {
                 ${urlDescarga ? `<a href="${urlDescarga}" class="btn btn--success" download>📥 Descargar Excel</a>` : ''}
                 ${urlCasos ? `<a href="${urlCasos}" class="btn btn--primary" download>📋 Casos de Revisión</a>` : ''}
                 <button class="btn btn--pdf" onclick="descargarPDF()">🖨 Informe PDF</button>
-                <button class="btn btn--primary" onclick="location.reload()">🔄 Cargar otro</button>
+                <button class="btn btn--primary" onclick="cargarOtroArchivo()">🔄 Cargar otro</button>
             </div>
         </div>
     `;

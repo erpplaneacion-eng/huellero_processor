@@ -24,48 +24,23 @@
     <p class="header__subtitle">Corporación Hacia un Valle Solidario</p>
 </header>
 
-<!-- Wrapper estrecho para el formulario y estados intermedios -->
-<div class="form-wrapper">
+<!-- Carga oculta de archivo (solo desde botón "Cargar otro") -->
+<input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
 
-    <!-- Formulario -->
-    <section id="formSection">
-        <!-- Carga de archivo -->
+<!-- Wrapper estrecho para estados intermedios -->
+<div class="form-wrapper">
+    <!-- Inicio: selección manual de archivo -->
+    <section id="inicioSection">
         <div class="card">
             <h2 class="card__title">
                 <span class="card__title-icon">📁</span>
-                Archivo de Huellero
+                Cargar Archivo de Huellero
             </h2>
-            <div class="upload-zone" id="uploadZone">
-                <div class="upload-zone__icon">📤</div>
-                <div class="upload-zone__text">
-                    Arrastra el archivo aquí o haz clic para seleccionar
-                </div>
-                <div class="upload-zone__hint">
-                    Formatos aceptados: .xls, .xlsx
-                </div>
-            </div>
-            <input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
+            <p class="result__message">Selecciona un archivo Excel para procesar la asistencia.</p>
+            <button id="btnSeleccionarArchivo" class="btn btn--primary">
+                📤 Seleccionar archivo
+            </button>
         </div>
-
-        <!-- Opciones -->
-        <div class="card">
-            <h2 class="card__title">
-                <span class="card__title-icon">⚙️</span>
-                Opciones
-            </h2>
-            <label class="checkbox-wrapper">
-                <input type="checkbox" id="usarMaestro" checked>
-                <div>
-                    <div class="checkbox-wrapper__label">Usar archivo maestro de empleados</div>
-                    <div class="checkbox-wrapper__hint">Agrega el número de documento a cada empleado</div>
-                </div>
-            </label>
-        </div>
-
-        <!-- Botón procesar -->
-        <button id="btnProcesar" class="btn btn--primary" disabled>
-            🚀 Procesar Archivo
-        </button>
     </section>
 
     <!-- Progreso -->
@@ -89,7 +64,6 @@
     <section id="resultSection" class="result-section">
         <!-- Se llena dinámicamente con JavaScript -->
     </section>
-
 </div><!-- /form-wrapper -->
 
 <!-- Dashboard de asistencia (ancho completo) -->

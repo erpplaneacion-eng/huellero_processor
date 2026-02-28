@@ -3,67 +3,33 @@
  * Corporación Hacia un Valle Solidario
  */
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     // Verificar si estamos en una página de área (no en home)
     if (typeof AREA_CONFIG === 'undefined') {
         return;
     }
 
-    // ========== AUTO-CARGA DESDE BD ==========
-    // Cargar registros guardados sin necesidad de subir un Excel
-    if (AREA_CONFIG.apiListarRegistros) {
-        fetch(AREA_CONFIG.apiListarRegistros)
-            .then(r => r.json())
-            .then(result => {
-                if (result.success && result.datos && result.datos.length > 0) {
-                    renderizarDashboard(result, AREA_CONFIG);
-                }
-            })
-            .catch(() => { /* Si falla, el usuario puede subir un Excel normalmente */ });
-    }
-
     // Elementos del DOM
-    const uploadZone = document.getElementById('uploadZone');
     const fileInput = document.getElementById('fileInput');
-    const usarMaestro = document.getElementById('usarMaestro');
-    const btnProcesar = document.getElementById('btnProcesar');
-    const formSection = document.getElementById('formSection');
+    const inicioSection = document.getElementById('inicioSection');
+    const btnSeleccionarArchivo = document.getElementById('btnSeleccionarArchivo');
     const progressSection = document.getElementById('progressSection');
     const progressFill = document.getElementById('progressFill');
     const progressStatus = document.getElementById('progressStatus');
     const resultSection = document.getElementById('resultSection');
 
     let selectedFile = null;
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+    }
+    if (btnSeleccionarArchivo) {
+        btnSeleccionarArchivo.addEventListener('click', abrirSelectorArchivo);
+    }
 
-    // ========== DRAG & DROP ==========
-    uploadZone.addEventListener('click', () => fileInput.click());
-
-    uploadZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadZone.classList.add('dragover');
-    });
-
-    uploadZone.addEventListener('dragleave', () => {
-        uploadZone.classList.remove('dragover');
-    });
-
-    uploadZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadZone.classList.remove('dragover');
-
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFileSelect(files[0]);
-        }
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFileSelect(e.target.files[0]);
-        }
-    });
-
-    // ========== FILE HANDLING ==========
     function handleFileSelect(file) {
         // Validar extensión
         const validExtensions = ['.xls', '.xlsx'];
@@ -75,34 +41,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         selectedFile = file;
-
-        // Actualizar UI
-        uploadZone.classList.add('has-file');
-        uploadZone.innerHTML = `
-            <div class="upload-zone__icon">✅</div>
-            <div class="upload-zone__filename">
-                📄 ${file.name}
-            </div>
-            <div class="upload-zone__hint">Clic para cambiar archivo</div>
-        `;
-
-        // Habilitar botón
-        btnProcesar.disabled = false;
+        procesarArchivo();
     }
-
-    // ========== PROCESSING ==========
-    btnProcesar.addEventListener('click', procesarArchivo);
 
     async function procesarArchivo() {
         if (!selectedFile) {
-            alert('Por favor seleccione un archivo');
+            abrirSelectorArchivo();
             return;
         }
 
         // Mostrar progreso
-        formSection.style.display = 'none';
-        progressSection.classList.add('active');
-        resultSection.classList.remove('active');
+        if (inicioSection) inicioSection.style.display = 'none';
+        if (progressSection) progressSection.classList.add('active');
+        if (resultSection) resultSection.classList.remove('active');
 
         // Simular progreso inicial
         updateProgress(10, 'Cargando archivo...');
@@ -110,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Preparar FormData
         const formData = new FormData();
         formData.append('archivo', selectedFile);
-        formData.append('usar_maestro', usarMaestro.checked);
+        formData.append('usar_maestro', 'true');
 
         try {
             updateProgress(30, 'Procesando datos...');
@@ -132,51 +83,57 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.success) {
                 mostrarResultadoExito(result);
             } else {
-                mostrarResultadoError(result.error || 'Error desconocido en el servidor');
+                mostrarResultadoError(result.error);
             }
 
         } catch (error) {
-            console.error('Error al procesar:', error);
-            mostrarResultadoError('Error: ' + (error.message || 'Error de conexión con el servidor'));
-        } finally {
-            // Garantizar que el spinner de progreso siempre se oculte,
-            // incluso si hubo una excepción inesperada en el bloque catch
-            progressSection.classList.remove('active');
+            console.error('Error:', error);
+            mostrarResultadoError('Error de conexión con el servidor');
         }
     }
 
     function updateProgress(percent, status) {
-        progressFill.style.width = percent + '%';
-        progressStatus.innerHTML = `<span class="progress-status__icon">⏳</span> ${status}`;
-    }
-
-    // ========== RESULTS ==========
-    function mostrarResultadoExito(result) {
-        progressSection.classList.remove('active');
-        try {
-            renderizarDashboard(result, AREA_CONFIG);
-        } catch (e) {
-            console.error('Error al renderizar el dashboard:', e);
-            mostrarResultadoError('Error al mostrar los resultados: ' + e.message);
+        if (progressFill) progressFill.style.width = percent + '%';
+        if (progressStatus) {
+            progressStatus.innerHTML = `<span class="progress-status__icon">⏳</span> ${status}`;
         }
     }
 
+    function mostrarResultadoExito(result) {
+        if (progressSection) progressSection.classList.remove('active');
+        if (inicioSection) inicioSection.style.display = 'none';
+        renderizarDashboard(result, AREA_CONFIG);
+    }
+
     function mostrarResultadoError(error) {
-        progressSection.classList.remove('active');
+        if (progressSection) progressSection.classList.remove('active');
+        if (!resultSection) return;
         resultSection.classList.add('active');
+        if (inicioSection) inicioSection.style.display = 'block';
 
         resultSection.innerHTML = `
             <div class="card result--error">
                 <div class="result__icon">❌</div>
                 <div class="result__title">Error en el Procesamiento</div>
                 <div class="result__error">${error}</div>
-
                 <div class="result__actions">
-                    <button class="btn btn--primary" onclick="location.reload()">
-                        🔄 Intentar de Nuevo
+                    <button class="btn btn--primary" onclick="cargarOtroArchivo()">
+                        📤 Seleccionar Otro Archivo
                     </button>
                 </div>
             </div>
         `;
     }
+
+    function abrirSelectorArchivo() {
+        if (!fileInput) return;
+        fileInput.value = '';
+        fileInput.click();
+    }
+
+    // Exponer acción para botón "Cargar otro" del dashboard
+    window.cargarOtroArchivo = function () {
+        if (inicioSection) inicioSection.style.display = 'block';
+        abrirSelectorArchivo();
+    };
 });
