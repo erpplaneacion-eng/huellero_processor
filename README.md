@@ -1,161 +1,146 @@
-# 🕐 Sistema Procesador de Huellero
+# Sistema Procesador de Huellero
 
-Sistema automático para limpiar y procesar archivos de control de asistencia (huellero biométrico).
+Sistema web para procesar archivos de control de asistencia (huellero biométrico) y generar reportes de nómina. Construido para Corporación Hacia un Valle Solidario (CHVS).
 
-## 📋 Características
+## Características
 
-- ✅ Limpieza automática de marcaciones duplicadas
-- ✅ Inferencia inteligente de estados faltantes (Entrada/Salida)
-- ✅ Detección y manejo de turnos nocturnos
-- ✅ Cálculo automático de horas laboradas
-- ✅ Generación de reportes en Excel con formato profesional
-- ✅ Sistema de observaciones automáticas
-- ✅ Log detallado del procesamiento
+- Limpieza automática de marcaciones duplicadas (ventana de 15 min)
+- Inferencia inteligente de estados faltantes (Entrada/Salida)
+- Detección y manejo de turnos nocturnos
+- Generación de reportes Excel con formato profesional y códigos de observación
+- Interfaz web con subida de archivos y visualización de resultados
+- Base de datos PostgreSQL con historial de asistencia
+- Despliegue en Railway
 
-## 🗂️ Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 huellero_processor/
-├── main.py                      # Archivo principal - ejecutar aquí
-├── config.py                    # Configuraciones del sistema
-├── requirements.txt             # Dependencias Python
-├── README.md                    # Este archivo
-│
-├── src/
-│   ├── __init__.py
-│   ├── data_cleaner.py         # Limpieza de datos
-│   ├── state_inference.py      # Inferencia de estados
-│   ├── shift_builder.py        # Construcción de turnos
-│   ├── calculator.py           # Cálculos de horas
-│   ├── excel_generator.py      # Generación de Excel
-│   └── logger.py               # Sistema de logging
+├── web/
+│   ├── manage.py
+│   ├── apps/
+│   │   ├── logistica/              # App principal
+│   │   │   ├── pipeline/           # Módulos del pipeline de procesamiento
+│   │   │   │   ├── config.py       # Umbrales, rangos horarios, feature flags
+│   │   │   │   ├── data_cleaner.py
+│   │   │   │   ├── state_inference.py
+│   │   │   │   ├── shift_builder.py
+│   │   │   │   ├── calculator.py
+│   │   │   │   └── excel_generator.py
+│   │   │   ├── processor.py        # Orquestador del pipeline
+│   │   │   ├── models.py           # Modelos PostgreSQL
+│   │   │   ├── views.py            # API endpoints
+│   │   │   └── management/commands/cargar_maestro.py
+│   │   └── users/                  # Autenticación y roles
+│   └── huellero_web/               # Configuración Django
 │
 ├── data/
-│   ├── input/                  # Colocar archivos de entrada aquí
-│   │   └── HUELLERO_*.xls
-│   ├── output/                 # Archivos procesados
-│   └── maestro/                # Archivo maestro de empleados (opcional)
-│       └── empleados.xlsx
+│   ├── input/                      # Archivos .xls/.xlsx del huellero
+│   ├── output/                     # Reportes generados
+│   └── maestro/
+│       └── empleados.xlsx          # Maestro de empleados (fuente de cédulas)
 │
-└── logs/                       # Logs de procesamiento
+├── .env                            # Variables de entorno (no versionado)
+├── requirements.txt
+└── railway.json
 ```
 
-## 🚀 Instalación
-
-### 1. Requisitos Previos
-- Python 3.8 o superior
-- pip (gestor de paquetes Python)
-
-### 2. Instalar Dependencias
+## Instalación y Desarrollo
 
 ```bash
+# Instalar dependencias
+cd web
 pip install -r requirements.txt
+
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con los valores correspondientes
+
+# Crear base de datos
+python manage.py migrate
+
+# Cargar datos maestro de empleados
+python manage.py cargar_maestro
+
+# Crear usuario administrador
+python manage.py createsuperuser
+
+# Levantar servidor de desarrollo
+python manage.py runserver
 ```
 
-## 📖 Uso
+## Cargar Maestro de Empleados
 
-### Opción 1: Uso Básico (Sin Archivo Maestro)
+El maestro se carga desde `data/maestro/empleados.xlsx`, que debe tener estas hojas:
 
-1. Coloca el archivo de huellero en `data/input/`
-2. Ejecuta:
+| Hoja | Tabla DB | Contenido |
+|------|----------|-----------|
+| `empleados_ejemplo` | `maestro_empleado` | CODIGO, NOMBRE, DOCUMENTO, CARGO |
+| `horas_cargos` | `maestro_cargo` | id_cargo, cargo, horas_dia, horas_semana |
+| `horarios` | `maestro_horario` | id_horario, hora_inicio, hora_fin |
+| `cargos_horarios` | `maestro_cargo_horario` | id_cargo, id_horario |
+| `conceptos` | `maestro_concepto` | observaciones, procesos |
 
 ```bash
-python main.py
+python manage.py cargar_maestro                        # carga normal
+python manage.py cargar_maestro --limpiar              # borra todo y recarga
+python manage.py cargar_maestro --ruta /otra/ruta.xlsx # ruta personalizada
 ```
 
-### Opción 2: Con Archivo Maestro de Empleados
-
-1. Crea archivo `data/maestro/empleados.xlsx` con columnas:
-   - CODIGO
-   - NOMBRE
-   - DOCUMENTO
-   - CARGO (opcional)
-
-2. Coloca el archivo de huellero en `data/input/`
-
-3. Ejecuta:
-
-```bash
-python main.py --con-maestro
-```
-
-### Opción 3: Modo Interactivo
-
-```bash
-python main.py --interactivo
-```
-
-## 📊 Archivo de Salida
-
-El sistema genera un archivo Excel con las siguientes columnas:
+## Archivo de Salida (Excel)
 
 | Columna | Descripción |
 |---------|-------------|
-| CODIGO COLABORADOR | ID del empleado |
+| CODIGO COLABORADOR | ID del empleado (del huellero) |
 | NOMBRE COMPLETO DEL COLABORADOR | Nombre completo |
-| DOCUMENTO DEL COLABORADOR | Cédula/documento |
+| DOCUMENTO DEL COLABORADOR | Cédula (tomada de `maestro_empleado`) |
 | FECHA | Fecha del turno (DD/MM/YYYY) |
 | DIA | Día de la semana |
-| # MARCACIONES AM | Marcaciones entre 06:00-11:59 |
-| # MARCACIONES PM | Marcaciones entre 12:00-23:59 |
+| # MARCACIONES AM | Marcaciones 06:00–11:59 |
+| # MARCACIONES PM | Marcaciones 12:00–23:59 |
 | HORA DE INGRESO | Hora de entrada |
 | HORA DE SALIDA | Hora de salida |
 | TOTAL HORAS LABORADAS | Horas trabajadas |
-| OBSERVACION | Notas y alertas |
+| OBSERVACION | Códigos automáticos de alerta |
 
-## ⚙️ Configuración
-
-Edita `config.py` para ajustar:
-
-- Umbrales de tiempo para duplicados
-- Horarios de turnos AM/PM
-- Validaciones de horas mínimas/máximas
-- Formato de fechas
-- Colores del Excel
-
-## 🔍 Tipos de Observaciones
+## Tipos de Observaciones
 
 | Código | Significado |
 |--------|-------------|
 | `OK` | Turno completo sin problemas |
-| `TURNO_NOCTURNO` | Entrada tarde, salida madrugada |
+| `TURNO_NOCTURNO` | Entrada ≥ 20:00, salida en madrugada |
 | `SALIDA_NR` | Salida no registrada |
 | `ENTRADA_NR` | Entrada no registrada |
 | `ESTADO_INFERIDO` | Estado deducido por contexto |
 | `DUPLICADOS_ELIM` | Marcaciones duplicadas eliminadas |
-| `ALERTA: Turno largo` | Más de 14 horas |
-| `ALERTA: Turno corto` | Menos de 6 horas |
-| `REQUIERE_REVISION` | Necesita revisión manual |
+| `TURNO_LARGO` | Más de 16 horas |
+| `TURNO_CORTO` | Menos de 4 horas |
+| `EXCEDE_JORNADA` | Supera límite de horas del cargo (9.8h) |
+| `TRABAJO_DOMINICAL` | Turno en domingo |
+| `SIN_REGISTROS` | Día sin marcaciones (entre primer y último registro) |
 
-## 📝 Logs
+## Variables de Entorno
 
-El sistema genera logs detallados en `logs/`:
-- `procesamiento_YYYYMMDD_HHMMSS.log` - Log general
-- `casos_especiales_YYYYMMDD.xlsx` - Casos para revisión manual
+Ver `web/.env.example` para la lista completa. Las principales:
 
-## contraseñas usuarios logistica
+```env
+DEBUG=True
+SECRET_KEY=...
+DATABASE_URL=...                        # PostgreSQL en producción
+GOOGLE_CREDENTIALS_JSON=...            # Credenciales Google Sheets (producción)
+GOOGLE_CREDENTIALS_FILE=credentials/nomina.json  # Alternativa local
+GOOGLE_SHEET_ID=...
+EMAIL_HOST_USER=...
+EMAIL_HOST_PASSWORD=...                # App Password de Google (16 chars)
+WEBHOOK_SECRET_TOKEN=...
+```
 
-marce123
-## administrador
-admin                                                                                                     
-Chvs2024* 
-## tecnico
- Usuario: admin
- Contraseña: admin123
+## Despliegue (Railway)
 
- norbello
- norbe123
-
-
-
-## 🛠️ Soporte
-
-Para reportar problemas o sugerencias, contactar al administrador del sistema.
-
-## 📄 Licencia
-
-Uso interno - Corporación Hacia un Valle Solidario
+El despliegue es automático vía git push. Railway ejecuta:
+1. `python manage.py migrate`
+2. `python manage.py collectstatic`
+3. `gunicorn huellero_web.wsgi`
 
 ---
-**Versión:** 1.0.0  
-**Última actualización:** Enero 2026
+**Uso interno — Corporación Hacia un Valle Solidario**
