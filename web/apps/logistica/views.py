@@ -123,30 +123,64 @@ class ListarRegistrosView(View):
     def get(self, request):
         try:
             from apps.logistica.models import Concepto
+            from django.db.models import Q
 
-            page = max(1, int(request.GET.get('page', 1)))
+            page     = max(1, int(request.GET.get('page', 1)))
+            search   = request.GET.get('search', '').strip()
+            mes      = request.GET.get('mes', '').strip()   # "YYYY-MM"
+            filtrado = bool(search or mes)
 
             processor = HuelleroProcessor(area='logistica')
             codigos_excluidos = processor._cargar_codigos_excluidos()
 
             base_qs = RegistroAsistencia.objects.exclude(codigo__in=codigos_excluidos)
 
-            # Totales globales (para el header del dashboard)
+            # Totales globales (para el header)
             total_registros_global = base_qs.count()
-            codigos_todos = list(
-                base_qs.values_list('codigo', flat=True).distinct().order_by('codigo')
-            )
-            total_empleados = len(codigos_todos)
+            total_empleados_global = base_qs.values('codigo').distinct().count()
 
-            # Paginar por empleado
-            offset = (page - 1) * self.PAGE_SIZE
-            codigos_pagina = codigos_todos[offset:offset + self.PAGE_SIZE]
-            has_more = (offset + self.PAGE_SIZE) < total_empleados
+            if filtrado:
+                # ── Filtro servidor: devuelve todos los coincidentes sin paginar ──
+                filtered_qs = base_qs
 
-            # Registros solo de esta página
-            registros_qs = base_qs.filter(
-                codigo__in=codigos_pagina
-            ).order_by('codigo', 'fecha', 'hora_ingreso')
+                if mes:
+                    try:
+                        year, month = mes.split('-')
+                        filtered_qs = filtered_qs.filter(
+                            fecha__year=int(year), fecha__month=int(month)
+                        )
+                    except (ValueError, AttributeError):
+                        pass
+
+                if search:
+                    q_filter = Q(nombre__icontains=search) | Q(documento__icontains=search)
+                    try:
+                        q_filter |= Q(codigo=int(search))
+                    except ValueError:
+                        pass
+                    filtered_qs = filtered_qs.filter(q_filter)
+
+                codigos_pagina = list(
+                    filtered_qs.values_list('codigo', flat=True).distinct().order_by('codigo')
+                )
+                registros_qs = filtered_qs.filter(
+                    codigo__in=codigos_pagina
+                ).order_by('codigo', 'fecha', 'hora_ingreso')
+                has_more = False
+                total_empleados = len(codigos_pagina)
+
+            else:
+                # ── Sin filtro: paginación normal ──
+                codigos_todos = list(
+                    base_qs.values_list('codigo', flat=True).distinct().order_by('codigo')
+                )
+                total_empleados = len(codigos_todos)
+                offset = (page - 1) * self.PAGE_SIZE
+                codigos_pagina = codigos_todos[offset:offset + self.PAGE_SIZE]
+                has_more = (offset + self.PAGE_SIZE) < total_empleados
+                registros_qs = base_qs.filter(
+                    codigo__in=codigos_pagina
+                ).order_by('codigo', 'fecha', 'hora_ingreso')
 
             horarios_por_codigo = processor._cargar_horarios_por_codigo()
 
@@ -203,7 +237,7 @@ class ListarRegistrosView(View):
                 'page':          page,
                 'has_more':      has_more,
                 'stats': {
-                    'empleados_unicos':      total_empleados,
+                    'empleados_unicos':      total_empleados_global,
                     'total_registros':       total_registros_global,
                     'turnos_completos':      0,
                     'turnos_incompletos':    0,
@@ -270,7 +304,9 @@ class DescargarRegistrosExcelView(View):
             if hasta_str:
                 qs = qs.filter(fecha__lte=hasta_str)
 
-            # ── Estilos ──────────────────────────────────────────────────
+            registros = list(qs)
+
+            # ── Estilos comunes ───────────────────────────────────────────
             fill_header = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
             font_header = Font(bold=True, color='FFFFFF', size=11)
             font_normal = Font(size=10)
@@ -283,6 +319,15 @@ class DescargarRegistrosExcelView(View):
             fills = {k: PatternFill(start_color=v, end_color=v, fill_type='solid')
                      for k, v in self._FILL.items()}
 
+            wb = Workbook()
+
+            # ══════════════════════════════════════════════════════════════
+            # Hoja 1: Registros
+            # ══════════════════════════════════════════════════════════════
+            ws = wb.active
+            ws.title = 'Registros'
+            ws.freeze_panes = 'A2'
+
             HEADERS = [
                 'CODIGO', 'NOMBRE COMPLETO', 'DOCUMENTO', 'CARGO',
                 'FECHA', 'DÍA', 'HORA INGRESO', 'HORA SALIDA',
@@ -291,22 +336,12 @@ class DescargarRegistrosExcelView(View):
             ]
             ANCHOS = [10, 35, 14, 25, 12, 12, 13, 13, 10, 10, 12, 12, 50, 30]
 
-            wb = Workbook()
-            ws = wb.active
-            ws.title = 'Registros'
-            ws.freeze_panes = 'A2'
-
-            # Encabezados
             for col, (h, ancho) in enumerate(zip(HEADERS, ANCHOS), 1):
                 cell = ws.cell(row=1, column=col, value=h)
-                cell.fill   = fill_header
-                cell.font   = font_header
-                cell.alignment = align_center
-                cell.border = border
+                cell.fill, cell.font, cell.alignment, cell.border = fill_header, font_header, align_center, border
                 ws.column_dimensions[get_column_letter(col)].width = ancho
 
-            # Datos
-            for row_num, r in enumerate(qs, 2):
+            for row_num, r in enumerate(registros, 2):
                 valores = [
                     r.codigo, r.nombre, r.documento, r.cargo,
                     r.fecha.strftime('%d/%m/%Y'), r.dia,
@@ -315,15 +350,20 @@ class DescargarRegistrosExcelView(View):
                     r.total_horas, r.limite_horas_dia,
                     r.observacion, r.observaciones_1,
                 ]
-                color_key = self._color_observacion(r.observacion)
-                fill = fills[color_key]
-
+                fill = fills[self._color_observacion(r.observacion)]
                 for col, valor in enumerate(valores, 1):
                     cell = ws.cell(row=row_num, column=col, value=valor)
-                    cell.fill   = fill
-                    cell.font   = font_normal
-                    cell.border = border
+                    cell.fill, cell.font, cell.border = fill, font_normal, border
                     cell.alignment = align_center if isinstance(valor, (int, float)) else align_left
+
+            # ══════════════════════════════════════════════════════════════
+            # Hoja 2: Horas por Semana
+            # ══════════════════════════════════════════════════════════════
+            self._crear_hoja_horas_semana(
+                wb, registros,
+                fill_header, font_header, font_normal,
+                align_center, align_left, border,
+            )
 
             buffer = io.BytesIO()
             wb.save(buffer)
@@ -346,6 +386,105 @@ class DescargarRegistrosExcelView(View):
                 f'Error: {e}\n\n{traceback.format_exc()}',
                 status=500, content_type='text/plain',
             )
+
+    def _crear_hoja_horas_semana(self, wb, registros, fill_header, font_header,
+                                  font_normal, align_center, align_left, border):
+        """Hoja 2: horas acumuladas por empleado por semana vs límite del cargo."""
+        from datetime import timedelta
+        from openpyxl.styles import PatternFill
+        from apps.logistica.models import Cargo, Empleado
+
+        # ── Mapa cargo_id → horas_semana ─────────────────────────────────
+        limite_por_cargo_id = {
+            c.id_cargo: c.horas_semana
+            for c in Cargo.objects.all()
+        }
+        # Mapa codigo_empleado → cargo_id (para empleados que tienen cargo asignado)
+        cargo_id_por_codigo = {
+            e.codigo: e.cargo_id
+            for e in Empleado.objects.exclude(cargo__isnull=True).select_related('cargo')
+        }
+
+        # ── Acumular horas por (codigo, semana_iso) ───────────────────────
+        from collections import defaultdict
+        semanas = defaultdict(lambda: {
+            'nombre': '', 'cargo': '', 'horas': 0.0,
+            'fecha_inicio': None, 'anio': 0, 'semana': 0,
+        })
+
+        for r in registros:
+            if not r.fecha or r.total_horas is None:
+                continue
+            iso = r.fecha.isocalendar()
+            key = (r.codigo, iso[0], iso[1])   # (codigo, año_iso, semana_iso)
+            d = semanas[key]
+            d['nombre']  = d['nombre']  or r.nombre
+            d['cargo']   = d['cargo']   or r.cargo
+            d['horas']  += float(r.total_horas or 0)
+            d['anio']    = iso[0]
+            d['semana']  = iso[1]
+            # Lunes de esa semana
+            if d['fecha_inicio'] is None:
+                lunes = r.fecha - timedelta(days=r.fecha.weekday())
+                d['fecha_inicio'] = lunes
+
+        # ── Construir filas ordenadas ─────────────────────────────────────
+        filas = []
+        for (codigo, anio, semana), d in sorted(semanas.items()):
+            cargo_id  = cargo_id_por_codigo.get(codigo)
+            limite    = limite_por_cargo_id.get(cargo_id) if cargo_id else None
+            horas     = round(d['horas'], 2)
+            diferencia = round(horas - limite, 2) if limite else None
+            fecha_ini = d['fecha_inicio']
+            fecha_fin = (fecha_ini + timedelta(days=6)) if fecha_ini else None
+
+            if limite is None:
+                estado, color = 'SIN LÍMITE', 'D9D9D9'
+            elif horas > limite:
+                estado, color = 'EXCEDE', 'FFC7CE'
+            else:
+                estado, color = 'OK', 'C6EFCE'
+
+            filas.append((
+                codigo,
+                d['nombre'],
+                d['cargo'] or '',
+                limite or '',
+                anio,
+                semana,
+                fecha_ini.strftime('%d/%m/%Y') if fecha_ini else '',
+                fecha_fin.strftime('%d/%m/%Y') if fecha_fin else '',
+                horas,
+                diferencia if diferencia is not None else '',
+                estado,
+                color,
+            ))
+
+        # ── Escribir hoja ─────────────────────────────────────────────────
+        ws2 = wb.create_sheet(title='Horas por Semana')
+        ws2.freeze_panes = 'A2'
+
+        HEADERS2 = [
+            'CODIGO', 'NOMBRE COMPLETO', 'CARGO',
+            'LÍMITE HORAS SEMANA', 'AÑO', 'SEMANA',
+            'INICIO SEMANA', 'FIN SEMANA',
+            'TOTAL HORAS', 'DIFERENCIA', 'ESTADO',
+        ]
+        ANCHOS2 = [10, 35, 25, 18, 8, 10, 14, 14, 12, 12, 14]
+
+        for col, (h, ancho) in enumerate(zip(HEADERS2, ANCHOS2), 1):
+            cell = ws2.cell(row=1, column=col, value=h)
+            cell.fill, cell.font, cell.alignment, cell.border = fill_header, font_header, align_center, border
+            from openpyxl.utils import get_column_letter
+            ws2.column_dimensions[get_column_letter(col)].width = ancho
+
+        for row_num, fila in enumerate(filas, 2):
+            *valores, color = fila
+            fill_row = PatternFill(start_color=color, end_color=color, fill_type='solid')
+            for col, valor in enumerate(valores, 1):
+                cell = ws2.cell(row=row_num, column=col, value=valor)
+                cell.fill, cell.font, cell.border = fill_row, font_normal, border
+                cell.alignment = align_center if isinstance(valor, (int, float)) else align_left
 
 
 @method_decorator(login_required, name='dispatch')

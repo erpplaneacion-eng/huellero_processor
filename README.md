@@ -142,5 +142,7 @@ El despliegue es automático vía git push. Railway ejecuta:
 2. `python manage.py collectstatic`
 3. `gunicorn huellero_web.wsgi`
 
+
+
 ---
 **Uso interno — Corporación Hacia un Valle Solidario**
