@@ -4,11 +4,14 @@
  */
 
 /* ===== Estado del módulo ===== */
-let _dashEmpleados = [];       // lista completa
-let _dashFiltrados = [];       // lista tras búsqueda
-let _dashResult = null;        // resultado completo de la API
+let _dashEmpleados = [];       // lista acumulada de empleados cargados
+let _dashFiltrados = [];       // lista tras búsqueda/filtro
+let _dashResult = null;        // resultado de la última llamada a la API
 let _dashAreaConfig = null;    // AREA_CONFIG
 let _dashMesFiltro = '';       // "YYYY-MM" o '' para todos
+let _dashPage = 1;             // página actual
+let _dashHasMore = false;      // si hay más empleados por cargar
+let _dashCargandoMas = false;  // guard para evitar doble clic
 const _PDF_CLASES_EXCLUIDAS = new Set(['fila--verde', 'fila--gris', 'fila--naranja', 'fila--azul']);
 
 /* ===== Punto de entrada ===== */
@@ -18,6 +21,8 @@ function renderizarDashboard(result, areaConfig) {
     _dashEmpleados = result.datos || [];
     _dashFiltrados = _dashEmpleados.slice();
     _dashMesFiltro = '';
+    _dashPage = result.page || 1;
+    _dashHasMore = result.has_more || false;
 
     const section = document.getElementById('dashboardSection');
     section.style.display = 'block';
@@ -54,10 +59,13 @@ function _construirHTML() {
             <input id="dashBuscador" type="text" placeholder="🔍 Buscar por nombre o código...">
         </div>
         <div class="dashboard-count" id="dashCount">
-            Mostrando ${_dashEmpleados.length} de ${_dashEmpleados.length} empleados
+            Mostrando ${_dashEmpleados.length} de ${stats.empleados_unicos} empleados
         </div>
         <div id="dashLista">
             ${renderizarEmpleados(_dashEmpleados)}
+        </div>
+        <div id="dashCargarMas">
+            ${_renderizarBotonCargarMas()}
         </div>
         ${_renderizarLeyenda()}
     `;
@@ -389,14 +397,70 @@ function filtrarEmpleados(query) {
         );
 
     document.getElementById('dashLista').innerHTML = renderizarEmpleados(_dashFiltrados);
+    const totalGlobal = (_dashResult && _dashResult.stats) ? _dashResult.stats.empleados_unicos : _dashEmpleados.length;
     document.getElementById('dashCount').textContent =
-        `Mostrando ${_dashFiltrados.length} de ${_dashEmpleados.length} empleados`;
+        `Mostrando ${_dashFiltrados.length} de ${totalGlobal} empleados`;
 
     // Actualizar barra de stats con los datos filtrados
     const statsBar = document.getElementById('dashStatsBar');
     if (statsBar) {
         const resumen = calcularResumenGlobal(_dashFiltrados);
         statsBar.innerHTML = _renderizarStatsBar(resumen);
+    }
+}
+
+/* ===== Botón cargar más ===== */
+function _renderizarBotonCargarMas() {
+    if (!_dashHasMore) return '';
+    return `
+        <div style="text-align:center;padding:20px 0">
+            <button class="btn btn--primary" id="btnCargarMas" onclick="cargarMasEmpleados()">
+                ⬇ Cargar más empleados
+            </button>
+        </div>
+    `;
+}
+
+async function cargarMasEmpleados() {
+    if (_dashCargandoMas || !_dashHasMore) return;
+    _dashCargandoMas = true;
+
+    const btn = document.getElementById('btnCargarMas');
+    if (btn) { btn.disabled = true; btn.textContent = 'Cargando...'; }
+
+    try {
+        const nextPage = _dashPage + 1;
+        const url = _dashAreaConfig.apiListarRegistros + '?page=' + nextPage;
+        const response = await fetch(url, { method: 'GET' });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) throw new Error(result.error || 'Error al cargar más.');
+
+        // Acumular empleados
+        _dashEmpleados = _dashEmpleados.concat(result.datos || []);
+        _dashFiltrados = _dashEmpleados.slice();
+        _dashPage = result.page || nextPage;
+        _dashHasMore = result.has_more || false;
+
+        // Agregar nuevas tarjetas al DOM (sin re-renderizar todo)
+        const lista = document.getElementById('dashLista');
+        if (lista) {
+            lista.insertAdjacentHTML('beforeend', renderizarEmpleados(result.datos || []));
+        }
+
+        // Actualizar contador y botón
+        const count = document.getElementById('dashCount');
+        if (count) {
+            count.textContent = `Mostrando ${_dashEmpleados.length} de ${_dashResult.stats.empleados_unicos} empleados`;
+        }
+        const contenedor = document.getElementById('dashCargarMas');
+        if (contenedor) contenedor.innerHTML = _renderizarBotonCargarMas();
+
+    } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = '⬇ Cargar más empleados'; }
+        console.error('Error cargando más empleados:', err);
+    } finally {
+        _dashCargandoMas = false;
     }
 }
 

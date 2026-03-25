@@ -117,7 +117,8 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
 
         try {
-            const response = await fetch(AREA_CONFIG.apiListarRegistros, { method: 'GET' });
+            const url = AREA_CONFIG.apiListarRegistros + '?page=1';
+            const response = await fetch(url, { method: 'GET' });
             const result = await response.json();
 
             if (!response.ok || !result.success) {

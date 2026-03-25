@@ -115,20 +115,37 @@ class GuardarObs1View(View):
 @method_decorator(login_required, name='dispatch')
 class ListarRegistrosView(View):
     """
-    Devuelve todos los registros guardados en BD con el mismo formato
-    que usa el dashboard, sin necesidad de procesar un Excel.
-    GET /logistica/api/registros/
+    Devuelve registros guardados en BD paginados por empleado (10 por página).
+    GET /logistica/api/registros/?page=1
     """
+    PAGE_SIZE = 10
 
     def get(self, request):
         try:
             from apps.logistica.models import Concepto
 
+            page = max(1, int(request.GET.get('page', 1)))
+
             processor = HuelleroProcessor(area='logistica')
             codigos_excluidos = processor._cargar_codigos_excluidos()
 
-            registros_qs = RegistroAsistencia.objects.exclude(
-                codigo__in=codigos_excluidos
+            base_qs = RegistroAsistencia.objects.exclude(codigo__in=codigos_excluidos)
+
+            # Totales globales (para el header del dashboard)
+            total_registros_global = base_qs.count()
+            codigos_todos = list(
+                base_qs.values_list('codigo', flat=True).distinct().order_by('codigo')
+            )
+            total_empleados = len(codigos_todos)
+
+            # Paginar por empleado
+            offset = (page - 1) * self.PAGE_SIZE
+            codigos_pagina = codigos_todos[offset:offset + self.PAGE_SIZE]
+            has_more = (offset + self.PAGE_SIZE) < total_empleados
+
+            # Registros solo de esta página
+            registros_qs = base_qs.filter(
+                codigo__in=codigos_pagina
             ).order_by('codigo', 'fecha', 'hora_ingreso')
 
             horarios_por_codigo = processor._cargar_horarios_por_codigo()
@@ -174,7 +191,7 @@ class ListarRegistrosView(View):
             datos = list(empleados.values())
             conceptos = list(
                 Concepto.objects.values_list('observaciones', flat=True).order_by('observaciones')
-            )
+            ) if page == 1 else []
 
             return JsonResponse({
                 'success':       True,
@@ -183,9 +200,11 @@ class ListarRegistrosView(View):
                 'archivo':       None,
                 'archivo_casos': None,
                 'desde_db':      True,
+                'page':          page,
+                'has_more':      has_more,
                 'stats': {
-                    'empleados_unicos':      len(datos),
-                    'total_registros':       registros_qs.count(),
+                    'empleados_unicos':      total_empleados,
+                    'total_registros':       total_registros_global,
                     'turnos_completos':      0,
                     'turnos_incompletos':    0,
                     'duplicados_eliminados': 0,
