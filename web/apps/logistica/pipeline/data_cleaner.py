@@ -233,7 +233,11 @@ class DataCleaner:
         """
         Corrige automáticamente registros con estados lógicamente incorrectos:
         1. "Entrada" en horario PM (13:00 - 19:59) -> Salida (Fin turno diurno)
+           EXCEPCIÓN: no corregir si el siguiente registro del empleado es una Salida al
+           día siguiente con hora < 11h (indica inicio de turno nocturno, ej. 18:40 → 06:05).
         2. "Salida" en horario AM (05:00 - 11:00) -> Entrada (Inicio turno diurno)
+           EXCEPCIÓN: no corregir si la última Entrada del empleado fue el día anterior
+           por la tarde/noche (≥ 14h), lo que indica que es una salida real de turno nocturno.
         3. "Salida" en horario nocturno (20:00 - 23:59) -> Entrada (Inicio turno nocturno)
 
         Args:
@@ -246,26 +250,75 @@ class DataCleaner:
 
         df_corregido = df.copy()
 
-        # --- REGLA 1: Entrada en la tarde (13:00 - 19:59) -> Salida ---
-        mask_pm_erronea_base = (
+        # --- REGLA 1: Entrada PM (13:00 - 19:59) -> Salida ---
+        # EXCEPCIÓN: no corregir si el siguiente registro del empleado sugiere turno nocturno
+        # (el próximo registro es una Salida en el día siguiente con hora < 11h)
+        mask_pm_candidata = (
             (df_corregido['ESTADO'] == 'Entrada') &
             (df_corregido['FECHA_HORA'].dt.hour >= 13) &
             (df_corregido['FECHA_HORA'].dt.hour < 20)
         )
-        # No autocorregir esta regla para vigilantes con castigo especial
         if getattr(config, 'VIGILANTE_CASTIGO_HABILITADO', False):
             codigos_vigilante = set(getattr(config, 'VIGILANTE_CASTIGO_CODIGOS', []))
             mask_vigilante = df_corregido['CODIGO'].astype('Int64').isin(codigos_vigilante)
-            mask_pm_erronea = mask_pm_erronea_base & (~mask_vigilante)
-        else:
-            mask_pm_erronea = mask_pm_erronea_base
+            mask_pm_candidata = mask_pm_candidata & (~mask_vigilante)
 
-        # --- REGLA 2: Salida en la mañana (05:00 - 11:00) -> Entrada ---
-        mask_am_erronea = (
+        excluir_pm = set()
+        if mask_pm_candidata.any():
+            for idx in df_corregido[mask_pm_candidata].index:
+                row = df_corregido.loc[idx]
+                siguientes = df_corregido[
+                    (df_corregido['CODIGO'] == row['CODIGO']) &
+                    (df_corregido['FECHA_HORA'] > row['FECHA_HORA'])
+                ]
+                if siguientes.empty:
+                    continue
+                siguiente = siguientes.loc[siguientes['FECHA_HORA'].idxmin()]
+                horas_diff = (siguiente['FECHA_HORA'] - row['FECHA_HORA']).total_seconds() / 3600
+                # Es inicio de turno nocturno: el siguiente registro es una Salida al día
+                # siguiente por la mañana, dentro de una ventana de turno razonable
+                if (
+                    siguiente['FECHA_HORA'].date() > row['FECHA_HORA'].date()
+                    and siguiente['FECHA_HORA'].hour < 11
+                    and siguiente['ESTADO'] == 'Salida'
+                    and 0 < horas_diff <= config.HORAS_MAXIMAS_TURNO
+                ):
+                    excluir_pm.add(idx)
+
+        mask_pm_erronea = mask_pm_candidata & ~df_corregido.index.isin(excluir_pm)
+
+        # --- REGLA 2: Salida AM (05:00 - 11:00) -> Entrada ---
+        # EXCEPCIÓN: no corregir si es una salida válida de turno nocturno
+        # (la última Entrada del empleado fue el día anterior por la tarde/noche, ≥ 14h)
+        mask_am_candidata = (
             (df_corregido['ESTADO'] == 'Salida') &
             (df_corregido['FECHA_HORA'].dt.hour >= 5) &
             (df_corregido['FECHA_HORA'].dt.hour < 11)
         )
+
+        excluir_am = set()
+        if mask_am_candidata.any():
+            for idx in df_corregido[mask_am_candidata].index:
+                row = df_corregido.loc[idx]
+                previos_entrada = df_corregido[
+                    (df_corregido['CODIGO'] == row['CODIGO']) &
+                    (df_corregido['FECHA_HORA'] < row['FECHA_HORA']) &
+                    (df_corregido['ESTADO'] == 'Entrada')
+                ]
+                if previos_entrada.empty:
+                    continue
+                ultima_entrada = previos_entrada.loc[previos_entrada['FECHA_HORA'].idxmax()]
+                horas_diff = (row['FECHA_HORA'] - ultima_entrada['FECHA_HORA']).total_seconds() / 3600
+                # Es salida nocturna válida: la última Entrada fue el día anterior por la
+                # tarde/noche (≥ 14h), cruzó medianoche, dentro de ventana de turno
+                if (
+                    ultima_entrada['FECHA_HORA'].date() < row['FECHA_HORA'].date()
+                    and ultima_entrada['FECHA_HORA'].hour >= 14
+                    and 0 < horas_diff <= config.HORAS_MAXIMAS_TURNO
+                ):
+                    excluir_am.add(idx)
+
+        mask_am_erronea = mask_am_candidata & ~df_corregido.index.isin(excluir_am)
 
         # --- REGLA 3: Salida Nocturna (20:00 - 23:59) -> Entrada ---
         mask_nocturna_erronea = (
@@ -290,6 +343,11 @@ class DataCleaner:
                     logger.info(f"AUTO-CORRECCIÓN: {reg['CODIGO']} | {reg['FECHA_HORA']} | {motivo}")
 
                 logger.info(f"✅ Se corrigieron {num_corr} registros: {motivo}")
+
+        if excluir_pm:
+            logger.info(f"ℹ️  {len(excluir_pm)} Entrada(s) PM preservadas como inicio de turno nocturno")
+        if excluir_am:
+            logger.info(f"ℹ️  {len(excluir_am)} Salida(s) AM preservadas como fin de turno nocturno")
 
         return df_corregido
 
