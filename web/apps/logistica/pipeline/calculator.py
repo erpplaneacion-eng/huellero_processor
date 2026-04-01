@@ -393,6 +393,8 @@ class Calculator:
             columnas_maestro = ['CODIGO', 'NOMBRE_CARGO', 'LIMITE_HORAS_DIA', 'LIMITE_HORAS_SEMANA', 'COLABORADORES_ESPERADOS']
             if 'DOCUMENTO' in df_maestro.columns:
                 columnas_maestro.append('DOCUMENTO')
+            if 'NOMBRE_MAESTRO' in df_maestro.columns:
+                columnas_maestro.append('NOMBRE_MAESTRO')
 
             df_maestro = df_maestro[columnas_maestro].drop_duplicates('CODIGO')
 
@@ -405,6 +407,14 @@ class Calculator:
             )
 
             # Actualizar columnas en el resultado
+
+            # Usar nombre de la BD cuando esté disponible (sobreescribe el nombre del huellero)
+            if 'NOMBRE_MAESTRO' in df_resultado.columns:
+                df_resultado['NOMBRE COMPLETO DEL COLABORADOR'] = df_resultado['NOMBRE_MAESTRO'].where(
+                    df_resultado['NOMBRE_MAESTRO'].notna() & (df_resultado['NOMBRE_MAESTRO'] != ''),
+                    df_resultado['NOMBRE COMPLETO DEL COLABORADOR']
+                )
+                df_resultado = df_resultado.drop('NOMBRE_MAESTRO', axis=1)
 
             # Actualizar columna de documento (convertir a entero para evitar notación científica)
             if 'DOCUMENTO' in df_resultado.columns:

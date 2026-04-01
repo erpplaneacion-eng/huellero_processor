@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from django.conf import settings
+from django.core.management import call_command
 from django.http import HttpResponse, JsonResponse, FileResponse, Http404
 from django.views import View
 from django.views.generic import TemplateView
@@ -502,3 +503,29 @@ class DescargarView(View):
             as_attachment=True,
             filename=filename
         )
+
+
+@csrf_exempt
+def cron_sincronizar_planta(request):
+    """
+    GET/POST /logistica/cron/sincronizar-planta/?token=<WEBHOOK_SECRET_TOKEN>
+    Ejecuta sincronizar_planta: copia registros nuevos de tabla_planta → maestro_empleado.
+    Pensado para ser llamado diariamente por Railway Cron.
+    """
+    token_esperado = os.environ.get('WEBHOOK_SECRET_TOKEN', '')
+    token_recibido = (
+        request.GET.get('token') or
+        request.headers.get('Authorization', '').removeprefix('Bearer ').strip()
+    )
+    if not token_esperado or token_recibido != token_esperado:
+        return JsonResponse({'error': 'No autorizado'}, status=401)
+
+    import io
+    from django.core.management import call_command
+
+    buffer = io.StringIO()
+    try:
+        call_command('sincronizar_planta', stdout=buffer)
+        return JsonResponse({'success': True, 'log': buffer.getvalue()})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
