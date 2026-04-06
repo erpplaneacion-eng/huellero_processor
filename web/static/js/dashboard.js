@@ -90,11 +90,6 @@ function _renderizarHeader(stats, nombreArchivo, urlCasos) {
         ? `📄 ${nombreArchivo}`
         : '🗄️ Datos desde base de datos';
 
-    // Rango por defecto: primer día del mes actual hasta hoy
-    const hoy  = new Date();
-    const hasta = hoy.toISOString().slice(0, 10);
-    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10);
-
     return `
         <div class="dashboard-header">
             <div class="dashboard-header__meta">
@@ -106,28 +101,12 @@ function _renderizarHeader(stats, nombreArchivo, urlCasos) {
                 </p>
             </div>
             <div class="dashboard-header__actions">
-                <div class="descarga-rango">
-                    <input type="date" id="dashDesde" class="fecha-input" value="${desde}" title="Fecha inicio">
-                    <span class="descarga-rango__sep">—</span>
-                    <input type="date" id="dashHasta" class="fecha-input" value="${hasta}" title="Fecha fin">
-                    <button class="btn btn--success" onclick="descargarRegistrosExcel()">📥 Descargar Excel</button>
-                </div>
                 ${urlCasos ? `<a href="${urlCasos}" class="btn btn--primary" download>📋 Casos de Revisión</a>` : ''}
                 <button class="btn btn--pdf" onclick="descargarPDF()">🖨 Informe PDF</button>
                 <button class="btn btn--primary" onclick="cargarOtroArchivo()">🔄 Cargar otro</button>
             </div>
         </div>
     `;
-}
-
-/* ===== Descarga Excel desde BD con rango de fechas ===== */
-function descargarRegistrosExcel() {
-    const desde = document.getElementById('dashDesde').value;
-    const hasta  = document.getElementById('dashHasta').value;
-    const url = new URL(_dashAreaConfig.apiDescargarRegistros, window.location.origin);
-    if (desde) url.searchParams.set('desde', desde);
-    if (hasta)  url.searchParams.set('hasta',  hasta);
-    window.location.href = url.toString();
 }
 
 /* ===== Chips de resumen global ===== */
@@ -236,29 +215,10 @@ function calcularStatsEmpleado(registros) {
 
 /* ===== Tabla de registros ===== */
 function renderizarTablaRegistros(registros) {
-    const conceptos = (_dashResult && _dashResult.conceptos) ? _dashResult.conceptos : [];
-    const opcionesHTML = conceptos.map(c =>
-        `<option value="${_escaparAttr(c)}">${_truncar(c, 60)}</option>`
-    ).join('');
-
     const filas = registros.map(reg => {
         const clase = determinarClaseFila(reg.observacion);
         const horas = reg.horas !== null && reg.horas !== undefined ? formatearHoras(reg.horas) : '—';
         const obs = reg.observacion || '—';
-        const tieneId = reg.id !== null && reg.id !== undefined;
-        const obs1Val = reg.obs1 || '';
-
-        const selectHTML = tieneId
-            ? `<select class="obs1-select"
-                        data-id="${reg.id}"
-                        onchange="guardarObs1(this)"
-                        title="${_escaparAttr(obs1Val)}">
-                    <option value="">— Sin observación —</option>
-                    ${conceptos.map(c =>
-                        `<option value="${_escaparAttr(c)}"${c === obs1Val ? ' selected' : ''}>${_truncar(c, 60)}</option>`
-                    ).join('')}
-               </select>`
-            : `<span class="obs1-nobd">—</span>`;
 
         const turnoHint = reg.turno
             ? `<small class="turno-hint">${reg.turno}</small>`
@@ -272,7 +232,6 @@ function renderizarTablaRegistros(registros) {
                 <td>${reg.salida || '—'}</td>
                 <td>${horas}</td>
                 <td title="${obs}">${_truncar(obs, 55)}</td>
-                <td class="obs1-celda">${selectHTML}</td>
             </tr>
         `;
     }).join('');
@@ -287,56 +246,11 @@ function renderizarTablaRegistros(registros) {
                     <th>Salida</th>
                     <th>Total Horas</th>
                     <th>Observación</th>
-                    <th>Obs. Manual</th>
                 </tr>
             </thead>
             <tbody>${filas}</tbody>
         </table>
     `;
-}
-
-/* ===== Guardar OBSERVACIONES_1 vía AJAX ===== */
-function guardarObs1(selectEl) {
-    const registroId = parseInt(selectEl.dataset.id, 10);
-    const obs1 = selectEl.value;
-
-    if (!registroId || isNaN(registroId)) {
-        console.warn('guardarObs1: data-id inválido', selectEl.dataset.id);
-        return;
-    }
-
-    // URL desde AREA_CONFIG inyectada en el template, con fallback hardcodeado
-    const url = (_dashAreaConfig && _dashAreaConfig.apiGuardarObs1)
-        || '/logistica/api/registros/obs1/';
-
-    selectEl.disabled = true;
-    selectEl.style.opacity = '0.6';
-
-    fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ registro_id: registroId, obs1: obs1 })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.ok) {
-            selectEl.style.background = '#C6EFCE';
-            setTimeout(() => { selectEl.style.background = ''; }, 1500);
-        } else {
-            selectEl.style.background = '#FFC7CE';
-            console.error('Error al guardar obs1:', data.error);
-            setTimeout(() => { selectEl.style.background = ''; }, 2000);
-        }
-    })
-    .catch(err => {
-        selectEl.style.background = '#FFC7CE';
-        console.error('Error de red al guardar obs1:', err);
-        setTimeout(() => { selectEl.style.background = ''; }, 2000);
-    })
-    .finally(() => {
-        selectEl.disabled = false;
-        selectEl.style.opacity = '';
-    });
 }
 
 /* ===== Mapeo observacion → clase CSS ===== */

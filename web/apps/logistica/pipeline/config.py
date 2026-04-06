@@ -59,7 +59,7 @@ RANGO_INFERENCIA_SALIDA = [(14, 21)]   # 14:00 a 21:00 -> probablemente SALIDA
 TOLERANCIA_HORARIO_MIN = 90  # 1.5 horas por extremo
 
 # Definición de turno nocturno (hora de inicio)
-HORA_INICIO_TURNO_NOCTURNO = 20.0  # A partir de las 20:00 se considera inicio de nocturno
+HORA_INICIO_TURNO_NOCTURNO = 19.0  # A partir de las 19:00 se considera inicio de nocturno
 HORA_SALIDA_ESTANDAR_NOCTURNA = 6   # 06:00 AM como salida estándar si se olvida marcar
 
 # ========== CONFIGURACIÓN DE OBSERVACIONES ==========
@@ -101,7 +101,6 @@ COLUMNAS_OUTPUT = [
     'CODIGO COLABORADOR',
     'NOMBRE COMPLETO DEL COLABORADOR',
     'DOCUMENTO DEL COLABORADOR',
-    'CARGO',
     'FECHA',
     'DIA',
     '# MARCACIONES AM',
@@ -111,6 +110,7 @@ COLUMNAS_OUTPUT = [
     'TOTAL HORAS LABORADAS',
     'LÍMITE HORAS DÍA',
     'OBSERVACION',
+    'CARGO',
     'OBSERVACIONES_1'
 ]
 

@@ -5,8 +5,15 @@ Calcula horas, conteos y genera observaciones
 
 import pandas as pd
 from datetime import datetime, timedelta, time
+import os
+import re
 from . import config
 from .logger import logger
+
+try:
+    import psycopg2
+except Exception:
+    psycopg2 = None
 
 
 class Calculator:
@@ -15,6 +22,61 @@ class Calculator:
     def __init__(self):
         """Inicializa el calculador"""
         pass
+
+    def _normalizar_documento(self, valor):
+        """Normaliza documento a solo digitos para cruces entre fuentes."""
+        if valor is None:
+            return None
+        s = str(valor).strip().replace(',', '').replace(' ', '')
+        if not s:
+            return None
+        if re.fullmatch(r'\d+\.0+', s):
+            s = s.split('.')[0]
+        s = re.sub(r'\D', '', s)
+        return s or None
+
+    def _normalizar_cargo(self, valor):
+        """Normaliza texto de cargo para comparar de forma robusta."""
+        if valor is None:
+            return ''
+        return re.sub(r'\s+', ' ', str(valor).strip()).upper()
+
+    def _cargar_tabla_planta_por_documento(self):
+        """
+        Carga mapa de tabla_planta por documento:
+        {documento: [(nombre_completo, cargo), ...]}
+
+        Usa variable de entorno TABLA_PLANTA_DB_URL.
+        """
+        db_url = os.environ.get('TABLA_PLANTA_DB_URL', '').strip()
+        if not db_url:
+            return {}
+        if psycopg2 is None:
+            logger.warning("psycopg2 no disponible: no se puede consultar tabla_planta")
+            return {}
+
+        try:
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("SELECT cedula::text, nombre_completo::text, cargo::text FROM public.tabla_planta")
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+
+            m = {}
+            for doc, nombre, cargo in rows:
+                doc_n = self._normalizar_documento(doc)
+                if not doc_n:
+                    continue
+                m.setdefault(doc_n, []).append((
+                    str(nombre or '').strip(),
+                    str(cargo or '').strip(),
+                ))
+            logger.info(f"tabla_planta cargada para cruce por documento: {len(m)} documentos")
+            return m
+        except Exception as e:
+            logger.warning(f"No se pudo cargar tabla_planta externa: {e}")
+            return {}
 
     def contar_marcaciones_am_pm(self, df_empleado_dia):
         """
@@ -391,6 +453,8 @@ class Calculator:
 
             # Seleccionar columnas relevantes
             columnas_maestro = ['CODIGO', 'NOMBRE_CARGO', 'LIMITE_HORAS_DIA', 'LIMITE_HORAS_SEMANA', 'COLABORADORES_ESPERADOS']
+            if 'NOMBRE_MAESTRO' in df_maestro.columns:
+                columnas_maestro.insert(1, 'NOMBRE_MAESTRO')
             if 'DOCUMENTO' in df_maestro.columns:
                 columnas_maestro.append('DOCUMENTO')
 
@@ -406,6 +470,12 @@ class Calculator:
 
             # Actualizar columnas en el resultado
 
+            # Priorizar nombre oficial del maestro (BD) cuando exista
+            if 'NOMBRE_MAESTRO' in df_resultado.columns:
+                mask_nombre = df_resultado['NOMBRE_MAESTRO'].notna() & (df_resultado['NOMBRE_MAESTRO'].astype(str).str.strip() != '')
+                df_resultado.loc[mask_nombre, 'NOMBRE COMPLETO DEL COLABORADOR'] = df_resultado.loc[mask_nombre, 'NOMBRE_MAESTRO']
+                df_resultado = df_resultado.drop('NOMBRE_MAESTRO', axis=1)
+
             # Actualizar columna de documento (convertir a entero para evitar notación científica)
             if 'DOCUMENTO' in df_resultado.columns:
                 df_resultado['DOCUMENTO DEL COLABORADOR'] = df_resultado['DOCUMENTO'].apply(
@@ -417,6 +487,30 @@ class Calculator:
             if 'NOMBRE_CARGO' in df_resultado.columns:
                 df_resultado['CARGO'] = df_resultado['NOMBRE_CARGO'].fillna('')
                 df_resultado = df_resultado.drop('NOMBRE_CARGO', axis=1)
+
+            # Ajustar nombre desde tabla_planta (externa) cuando:
+            # 1) documento coincide
+            # 2) cargo coincide con el cargo ya resuelto en el maestro
+            tabla_planta_map = self._cargar_tabla_planta_por_documento()
+            if tabla_planta_map and 'DOCUMENTO DEL COLABORADOR' in df_resultado.columns and 'CARGO' in df_resultado.columns:
+                actualizados = 0
+                for idx, row in df_resultado.iterrows():
+                    doc = self._normalizar_documento(row.get('DOCUMENTO DEL COLABORADOR'))
+                    if not doc:
+                        continue
+                    candidatos = tabla_planta_map.get(doc, [])
+                    if not candidatos:
+                        continue
+                    cargo_actual = self._normalizar_cargo(row.get('CARGO'))
+                    if not cargo_actual:
+                        continue
+                    for nombre_tp, cargo_tp in candidatos:
+                        if self._normalizar_cargo(cargo_tp) == cargo_actual and nombre_tp:
+                            df_resultado.at[idx, 'NOMBRE COMPLETO DEL COLABORADOR'] = nombre_tp
+                            actualizados += 1
+                            break
+                if actualizados:
+                    logger.info(f"Nombres actualizados desde tabla_planta: {actualizados} filas")
 
             # Actualizar Límite Horas
             if 'LIMITE_HORAS_DIA' in df_resultado.columns:

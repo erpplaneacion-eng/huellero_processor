@@ -105,6 +105,7 @@ class ExcelGenerator:
                 color_error = PatternFill(start_color=config.COLORES['NARANJA'][1:], end_color=config.COLORES['NARANJA'][1:], fill_type='solid')
                 color_nocturno = PatternFill(start_color=config.COLORES['AZUL'][1:], end_color=config.COLORES['AZUL'][1:], fill_type='solid')
                 color_morado = PatternFill(start_color=config.COLORES['MORADO'][1:], end_color=config.COLORES['MORADO'][1:], fill_type='solid')
+                color_gris = PatternFill(start_color=config.COLORES['GRIS'][1:], end_color=config.COLORES['GRIS'][1:], fill_type='solid')
 
                 # Fuentes
                 font_encabezado = Font(bold=True, color='FFFFFF', size=11)
@@ -159,8 +160,19 @@ class ExcelGenerator:
 
                     # Determinar color de fila
                     fill_color = None
+                    obs_txt = str(observacion).strip()
+                    es_solo_exceso_horas = (
+                        '|' not in obs_txt
+                        and (
+                            'EXCEDE LÍMITE DE HORAS DEL CARGO' in obs_txt
+                            or config.OBSERVACIONES.get('EXCEDE_JORNADA', '') in obs_txt
+                        )
+                    )
+
                     if 'OK' in observacion or observacion == config.OBSERVACIONES.get('OK', 'Sin observaciones'):
                         fill_color = color_ok
+                    elif es_solo_exceso_horas:
+                        fill_color = color_gris
                     elif observacion == config.OBSERVACIONES.get('SIN_REGISTROS', 'SIN REGISTROS'):
                         fill_color = color_nocturno
                     elif config.OBSERVACIONES.get('SALIDA_ESTANDAR_NOCTURNA') in observacion:
@@ -339,6 +351,10 @@ class ExcelGenerator:
         # Crear archivo Excel
         with pd.ExcelWriter(ruta_salida, engine='openpyxl') as writer:
             # Hoja principal
+            columnas_reporte = [c for c in config.COLUMNAS_OUTPUT if c in df_resultado.columns]
+            if columnas_reporte:
+                faltantes = [c for c in df_resultado.columns if c not in columnas_reporte]
+                df_resultado = df_resultado[columnas_reporte + faltantes]
             df_resultado.to_excel(writer, sheet_name='Reporte', index=False)
 
             # Nuevas Hojas de Agrupación
@@ -348,7 +364,16 @@ class ExcelGenerator:
             # Hoja de Conceptos (para validación de datos en OBSERVACIONES_1)
             if df_conceptos is not None and 'observaciones' in df_conceptos.columns:
                 try:
-                    df_conceptos[['observaciones']].dropna().to_excel(writer, sheet_name='Conceptos', index=False)
+                    conceptos = (
+                        df_conceptos[['observaciones']]
+                        .copy()
+                        .dropna()
+                    )
+                    conceptos['observaciones'] = conceptos['observaciones'].astype(str).str.strip()
+                    conceptos = conceptos[conceptos['observaciones'] != '']
+                    conceptos = conceptos.drop_duplicates().sort_values('observaciones')
+                    conceptos.to_excel(writer, sheet_name='Conceptos', index=False)
+                    logger.info(f"Hoja 'Conceptos' creada con {len(conceptos)} valores para dropdown de OBSERVACIONES_1")
                 except Exception as e:
                     logger.warning(f"No se pudo crear hoja de Conceptos: {str(e)}")
 

@@ -32,16 +32,16 @@ class HuelleroProcessor:
 
     def _guardar_registros_en_db(self, df_resultado):
         """
-        Guarda df_resultado en la tabla RegistroAsistencia usando operaciones bulk.
-        1 SELECT para encontrar existentes + 1 INSERT para los nuevos → evita N round-trips.
-        Si ya existe un registro (codigo, fecha, hora_ingreso) no lo duplica.
+        Metodo legado deshabilitado.
+        Los registros de asistencia ya no se persisten en BD.
 
         Returns:
-            (
-                dict {(codigo, fecha_str, hora_ingreso): {'id', 'obs1'}},
-                {'creados': int, 'existentes': int, 'errores': int}
-            )
+            lookup vacio y estadisticas en cero
         """
+        logger.info("Persistencia de RegistroAsistencia deshabilitada: no se guardan resultados en BD.")
+        return {}, {'creados': 0, 'existentes': 0, 'errores': 0}
+
+        # --- Implementacion antigua (no usada) ---
         import math
         from datetime import datetime
         from django.db import transaction
@@ -326,9 +326,6 @@ class HuelleroProcessor:
             # Generar casos especiales
             ruta_casos = generator.generar_casos_especiales(df_resultado)
 
-            # ===== GUARDAR EN BASE DE DATOS =====
-            db_lookup, db_stats = self._guardar_registros_en_db(df_resultado)
-
             # ===== FIN DEL PROCESO =====
             logger.log_fin_proceso(exito=True)
 
@@ -336,8 +333,8 @@ class HuelleroProcessor:
             nombre_archivo = os.path.basename(ruta_salida)
             nombre_casos = os.path.basename(ruta_casos) if ruta_casos else None
 
-            # Serializar datos para el dashboard frontend (con IDs de BD)
-            datos = self._serializar_datos(df_resultado, db_lookup, horarios_por_codigo)
+            # Serializar datos para el dashboard frontend (sin persistencia en BD)
+            datos = self._serializar_datos(df_resultado, db_lookup=None, horarios_por_codigo=horarios_por_codigo)
 
             # Opciones de conceptos para el dropdown en el dashboard
             from apps.logistica.models import Concepto
@@ -348,7 +345,7 @@ class HuelleroProcessor:
                 'archivo': nombre_archivo,
                 'archivo_casos': nombre_casos,
                 'stats': stats,
-                'db_stats': db_stats,
+                'db_stats': {'creados': 0, 'existentes': 0, 'errores': 0},
                 'area': self.area,
                 'datos': datos,
                 'conceptos': conceptos,

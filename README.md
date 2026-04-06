@@ -1,161 +1,142 @@
-# 🕐 Sistema Procesador de Huellero
+# Sistema Procesador de Huellero
 
-Sistema automático para limpiar y procesar archivos de control de asistencia (huellero biométrico).
+Aplicacion web Django para procesar archivos de asistencia (huellero), generar reportes en Excel y administrar observaciones de novedades.
 
-## 📋 Características
+## Estado Actual (Abril 2026)
 
-- ✅ Limpieza automática de marcaciones duplicadas
-- ✅ Inferencia inteligente de estados faltantes (Entrada/Salida)
-- ✅ Detección y manejo de turnos nocturnos
-- ✅ Cálculo automático de horas laboradas
-- ✅ Generación de reportes en Excel con formato profesional
-- ✅ Sistema de observaciones automáticas
-- ✅ Log detallado del procesamiento
+Este repositorio ya no usa `main.py` ni `src/` en la raiz.
+La arquitectura actual es:
 
-## 🗂️ Estructura del Proyecto
+1. Aplicacion web Django en `web/`.
+2. Pipeline de procesamiento en `web/apps/logistica/pipeline/`.
 
-```
+## Caracteristicas
+
+- Limpieza automatica de marcaciones duplicadas.
+- Inferencia de estados faltantes (Entrada/Salida).
+- Deteccion de turnos nocturnos y reglas especiales.
+- Calculo de horas trabajadas y validaciones de jornada.
+- Generacion de Excel de resultados y casos especiales.
+- Persistencia de resultados en base de datos (`RegistroAsistencia`).
+- Dashboard web para consulta, filtros, descarga y observacion manual.
+
+## Estructura del Proyecto
+
+```text
 huellero_processor/
-├── main.py                      # Archivo principal - ejecutar aquí
-├── config.py                    # Configuraciones del sistema
-├── requirements.txt             # Dependencias Python
-├── README.md                    # Este archivo
-│
-├── src/
-│   ├── __init__.py
-│   ├── data_cleaner.py         # Limpieza de datos
-│   ├── state_inference.py      # Inferencia de estados
-│   ├── shift_builder.py        # Construcción de turnos
-│   ├── calculator.py           # Cálculos de horas
-│   ├── excel_generator.py      # Generación de Excel
-│   └── logger.py               # Sistema de logging
-│
-├── data/
-│   ├── input/                  # Colocar archivos de entrada aquí
-│   │   └── HUELLERO_*.xls
-│   ├── output/                 # Archivos procesados
-│   └── maestro/                # Archivo maestro de empleados (opcional)
-│       └── empleados.xlsx
-│
-└── logs/                       # Logs de procesamiento
+|-- data/
+|   |-- input/                  # Archivos de huellero cargados
+|   |-- output/                 # Excels generados
+|   `-- maestro/                # Excel maestro (empleados.xlsx)
+|-- docs/
+|   `-- ORGANIZACION_PROYECTO.md
+|-- logs/                       # Logs del procesamiento
+|-- web/
+|   |-- manage.py               # Entrada de comandos Django
+|   |-- huellero_web/           # Settings, urls, wsgi
+|   |-- apps/
+|   |   |-- users/              # Login y redireccion por area
+|   |   `-- logistica/
+|   |       |-- views.py        # Endpoints y vistas del area
+|   |       |-- models.py       # Maestro y registros de asistencia
+|   |       |-- processor.py    # Orquestador del pipeline
+|   |       `-- pipeline/       # data_cleaner, inference, turnos, calculo, excel
+|   |-- templates/
+|   `-- static/
+|-- requirements.txt
+|-- Procfile
+`-- railway.json
 ```
 
-## 🚀 Instalación
+## Instalacion
 
-### 1. Requisitos Previos
-- Python 3.8 o superior
-- pip (gestor de paquetes Python)
+Requisitos:
 
-### 2. Instalar Dependencias
+- Python 3.10+ recomendado.
+- `pip`.
+
+Instalar dependencias:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## 📖 Uso
+## Ejecucion Local
 
-### Opción 1: Uso Básico (Sin Archivo Maestro)
-
-1. Coloca el archivo de huellero en `data/input/`
-2. Ejecuta:
+Desde la raiz del repo:
 
 ```bash
-python main.py
+python web/manage.py migrate
+python web/manage.py collectstatic --noinput
+python web/manage.py runserver
 ```
 
-### Opción 2: Con Archivo Maestro de Empleados
+Abrir:
 
-1. Crea archivo `data/maestro/empleados.xlsx` con columnas:
-   - CODIGO
-   - NOMBRE
-   - DOCUMENTO
-   - CARGO (opcional)
+- `http://127.0.0.1:8000/users/login/`
 
-2. Coloca el archivo de huellero en `data/input/`
+## Flujo de Uso
 
-3. Ejecuta:
+1. Iniciar sesion.
+2. Entrar al area de Logistica (`/logistica/`).
+3. Cargar archivo `.xls` o `.xlsx` desde el modal del dashboard.
+4. El sistema procesa, guarda en BD y devuelve estadisticas.
+5. Desde el dashboard se puede:
+- Filtrar por mes, empleado o documento.
+- Descargar Excel de registros por rango de fechas.
+- Descargar PDF de novedades.
+- Guardar `OBSERVACIONES_1` por registro.
+
+## Carga de Maestro de Empleados
+
+Comando de gestion:
 
 ```bash
-python main.py --con-maestro
+python web/manage.py cargar_maestro
 ```
 
-### Opción 3: Modo Interactivo
+Opciones:
 
 ```bash
-python main.py --interactivo
+python web/manage.py cargar_maestro --ruta data/maestro/empleados.xlsx
+python web/manage.py cargar_maestro --limpiar
 ```
 
-## 📊 Archivo de Salida
+Hojas esperadas en el archivo maestro:
 
-El sistema genera un archivo Excel con las siguientes columnas:
+- `horas_cargos`
+- `horarios`
+- `cargos_horarios`
+- `empleados_ejemplo`
+- `conceptos`
 
-| Columna | Descripción |
-|---------|-------------|
-| CODIGO COLABORADOR | ID del empleado |
-| NOMBRE COMPLETO DEL COLABORADOR | Nombre completo |
-| DOCUMENTO DEL COLABORADOR | Cédula/documento |
-| FECHA | Fecha del turno (DD/MM/YYYY) |
-| DIA | Día de la semana |
-| # MARCACIONES AM | Marcaciones entre 06:00-11:59 |
-| # MARCACIONES PM | Marcaciones entre 12:00-23:59 |
-| HORA DE INGRESO | Hora de entrada |
-| HORA DE SALIDA | Hora de salida |
-| TOTAL HORAS LABORADAS | Horas trabajadas |
-| OBSERVACION | Notas y alertas |
+## Configuracion Clave
 
-## ⚙️ Configuración
+- Django: `web/huellero_web/settings.py`
+- Pipeline: `web/apps/logistica/pipeline/config.py`
 
-Edita `config.py` para ajustar:
+Variables de entorno relevantes:
 
-- Umbrales de tiempo para duplicados
-- Horarios de turnos AM/PM
-- Validaciones de horas mínimas/máximas
-- Formato de fechas
-- Colores del Excel
+- `DJANGO_ENV`
+- `DEBUG`
+- `SECRET_KEY`
+- `ALLOWED_HOSTS`
+- `DATABASE_URL`
+- `CSRF_TRUSTED_ORIGINS`
 
-## 🔍 Tipos de Observaciones
+## Despliegue (Railway)
 
-| Código | Significado |
-|--------|-------------|
-| `OK` | Turno completo sin problemas |
-| `TURNO_NOCTURNO` | Entrada tarde, salida madrugada |
-| `SALIDA_NR` | Salida no registrada |
-| `ENTRADA_NR` | Entrada no registrada |
-| `ESTADO_INFERIDO` | Estado deducido por contexto |
-| `DUPLICADOS_ELIM` | Marcaciones duplicadas eliminadas |
-| `ALERTA: Turno largo` | Más de 14 horas |
-| `ALERTA: Turno corto` | Menos de 6 horas |
-| `REQUIERE_REVISION` | Necesita revisión manual |
+Configurado en `railway.json` para:
 
-## 📝 Logs
+1. Ejecutar migraciones.
+2. Ejecutar `collectstatic`.
+3. Levantar `gunicorn`.
 
-El sistema genera logs detallados en `logs/`:
-- `procesamiento_YYYYMMDD_HHMMSS.log` - Log general
-- `casos_especiales_YYYYMMDD.xlsx` - Casos para revisión manual
+## Notas de Seguridad
 
-## contraseñas usuarios logistica
+- No incluir credenciales en archivos versionados.
+- Usar variables de entorno para secretos y accesos.
 
-marce123
-## administrador
-admin                                                                                                     
-Chvs2024* 
-## tecnico
- Usuario: admin
- Contraseña: admin123
+## Licencia
 
- norbello
- norbe123
-
-
-
-## 🛠️ Soporte
-
-Para reportar problemas o sugerencias, contactar al administrador del sistema.
-
-## 📄 Licencia
-
-Uso interno - Corporación Hacia un Valle Solidario
-
----
-**Versión:** 1.0.0  
-**Última actualización:** Enero 2026
+Uso interno - Corporacion Hacia un Valle Solidario.

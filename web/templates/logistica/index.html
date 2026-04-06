@@ -1,25 +1,13 @@
 ﻿{% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{{ area.nombre }}{% endblock %}
+{% block title %}Procesador de Huellero{% endblock %}
 
 {% block container_class %}container-fluid{% endblock %}
 
 {% block content %}
-<nav class="user-nav">
-    <div class="user-nav__info">
-        <span>👤</span>
-        <span class="user-nav__name">{{ user.get_full_name|default:user.username }}</span>
-        <span class="user-nav__area">({{ area.nombre }})</span>
-    </div>
-    <div>
-        <a href="{% url 'users:logout' %}" class="user-nav__link">🚪 Cerrar Sesion</a>
-    </div>
-</nav>
-
 <header class="header">
-    <div class="header__icon">{{ area.icono }}</div>
-    <h1 class="header__title">Huellero - {{ area.nombre }}</h1>
+    <h1 class="header__title">Procesador de Huellero</h1>
     <p class="header__subtitle">Corporacion Hacia un Valle Solidario</p>
 </header>
 
@@ -59,13 +47,8 @@
 <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 <script>
     const AREA_CONFIG = {
-        key: '{{ area_key }}',
-        nombre: '{{ area.nombre }}',
-        apiProcesar:        '{% url "logistica:procesar" %}',
-        apiDescargar:       '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', ''),
-        apiGuardarObs1:          '{% url "logistica:guardar_obs1" %}',
-        apiListarRegistros:      '{% url "logistica:listar_registros" %}',
-        apiDescargarRegistros:   '{% url "logistica:descargar_registros_excel" %}',
+        apiProcesar:  '{% url "logistica:procesar" %}',
+        apiDescargar: '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', ''),
     };
 </script>
 <script src="{% static 'js/dashboard.js' %}"></script>

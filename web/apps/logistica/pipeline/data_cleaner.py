@@ -232,9 +232,9 @@ class DataCleaner:
     def autocorregir_estados_erroneos(self, df):
         """
         Corrige automáticamente registros con estados lógicamente incorrectos:
-        1. "Entrada" en horario PM (13:00 - 19:59) -> Salida (Fin turno diurno)
+        1. "Entrada" en horario PM (13:00 - inicio nocturno) -> Salida (Fin turno diurno)
         2. "Salida" en horario AM (05:00 - 11:00) -> Entrada (Inicio turno diurno)
-        3. "Salida" en horario nocturno (20:00 - 23:59) -> Entrada (Inicio turno nocturno)
+        3. "Salida" en horario nocturno (inicio nocturno - 23:59) -> Entrada (Inicio turno nocturno)
 
         Args:
             df: DataFrame a procesar
@@ -246,11 +246,11 @@ class DataCleaner:
 
         df_corregido = df.copy()
 
-        # --- REGLA 1: Entrada en la tarde (13:00 - 19:59) -> Salida ---
+        # --- REGLA 1: Entrada en la tarde (13:00 - inicio nocturno) -> Salida ---
         mask_pm_erronea_base = (
             (df_corregido['ESTADO'] == 'Entrada') &
             (df_corregido['FECHA_HORA'].dt.hour >= 13) &
-            (df_corregido['FECHA_HORA'].dt.hour < 20)
+            (df_corregido['FECHA_HORA'].dt.hour < config.HORA_INICIO_TURNO_NOCTURNO)
         )
         # No autocorregir esta regla para vigilantes con castigo especial
         if getattr(config, 'VIGILANTE_CASTIGO_HABILITADO', False):
@@ -261,23 +261,44 @@ class DataCleaner:
             mask_pm_erronea = mask_pm_erronea_base
 
         # --- REGLA 2: Salida en la mañana (05:00 - 11:00) -> Entrada ---
-        mask_am_erronea = (
+        # Excepción: si hubo marca nocturna el día anterior para el mismo código,
+        # esta salida AM puede cerrar turno nocturno y no debe invertirse.
+        mask_am_erronea_base = (
             (df_corregido['ESTADO'] == 'Salida') &
             (df_corregido['FECHA_HORA'].dt.hour >= 5) &
             (df_corregido['FECHA_HORA'].dt.hour < 11)
         )
 
-        # --- REGLA 3: Salida Nocturna (20:00 - 23:59) -> Entrada ---
+        df_aux = df_corregido.copy()
+        df_aux['_fecha'] = df_aux['FECHA_HORA'].dt.date
+        df_aux['_hora_dec'] = df_aux['FECHA_HORA'].dt.hour + (df_aux['FECHA_HORA'].dt.minute / 60.0)
+
+        marcas_nocturnas = set(
+            zip(
+                df_aux.loc[df_aux['_hora_dec'] >= config.HORA_INICIO_TURNO_NOCTURNO, 'CODIGO'],
+                df_aux.loc[df_aux['_hora_dec'] >= config.HORA_INICIO_TURNO_NOCTURNO, '_fecha']
+            )
+        )
+
+        fecha_anterior = df_aux['_fecha'].apply(lambda d: d - pd.Timedelta(days=1))
+        tiene_contexto_nocturno_prev = pd.Series(
+            [(cod, f_prev) in marcas_nocturnas for cod, f_prev in zip(df_aux['CODIGO'], fecha_anterior)],
+            index=df_aux.index
+        )
+
+        mask_am_erronea = mask_am_erronea_base & (~tiene_contexto_nocturno_prev)
+
+        # --- REGLA 3: Salida Nocturna (inicio nocturno - 23:59) -> Entrada ---
         mask_nocturna_erronea = (
             (df_corregido['ESTADO'] == 'Salida') &
-            (df_corregido['FECHA_HORA'].dt.hour >= 20)
+            (df_corregido['FECHA_HORA'].dt.hour >= config.HORA_INICIO_TURNO_NOCTURNO)
         )
 
         # Aplicar correcciones
         for mask, nuevo_estado, motivo in [
-            (mask_pm_erronea, 'Salida', 'Corrección: Entrada PM -> Salida (13-20h)'),
+            (mask_pm_erronea, 'Salida', 'Corrección: Entrada PM -> Salida (13h-inicio nocturno)'),
             (mask_am_erronea, 'Entrada', 'Corrección: Salida AM -> Entrada (05-11h)'),
-            (mask_nocturna_erronea, 'Entrada', 'Corrección: Salida Nocturna -> Entrada (20-24h)')
+            (mask_nocturna_erronea, 'Entrada', 'Corrección: Salida Nocturna -> Entrada (inicio nocturno-24h)')
         ]:
             num_corr = mask.sum()
             if num_corr > 0:

@@ -8,67 +8,51 @@ Huellero Processor is a Python data pipeline that transforms raw biometric finge
 
 ## Commands
 
-### CLI (main processor)
+All Django commands run from the repo root (`huellero_processor/`):
+
+### Django Web Interface
 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run (auto-detects newest file in data/input/)
-python main.py
-
-# Run with specific file
-python main.py --archivo path/to/file.xls
-
-# Run without employee master file
-python main.py --sin-maestro
-
-# Interactive mode (file selection prompt)
-python main.py --interactivo
-```
-
-### Django Web Interface
-
-```bash
-cd web
-
-# Install web dependencies
-pip install -r requirements.txt
-
 # Run migrations
-python manage.py migrate
+python web/manage.py migrate
 
 # Create superuser
-python manage.py createsuperuser
+python web/manage.py createsuperuser
 
-# Run development server
-python manage.py runserver
+# Collect static files
+python web/manage.py collectstatic --noinput
+
+# Run development server (http://127.0.0.1:8000/users/login/)
+python web/manage.py runserver
 ```
 
 ### Logística Management Commands
 
 ```bash
-cd web
-
 # Load employee master data from Excel into PostgreSQL
 # Reads from data/maestro/empleados.xlsx (sheets: empleados_ejemplo, horas_cargos, horarios, cargos_horarios, conceptos)
-python manage.py cargar_maestro
+python web/manage.py cargar_maestro
+
+# Options:
+python web/manage.py cargar_maestro --ruta data/maestro/empleados.xlsx
+python web/manage.py cargar_maestro --limpiar
 ```
 
 ### Nómina Management Commands
 
 ```bash
-cd web
-
 # Generate daily facturacion records (run at 8 AM)
-python manage.py facturacion_diaria [--fecha YYYY-MM-DD] [--forzar]
+python web/manage.py facturacion_diaria [--fecha YYYY-MM-DD] [--forzar]
 
 # Generate daily nomina_cali records (run at 8 AM)
-python manage.py nomina_cali_diaria [--fecha YYYY-MM-DD] [--forzar] [--sede CALI|YUMBO]
+python web/manage.py nomina_cali_diaria [--fecha YYYY-MM-DD] [--forzar] [--sede CALI|YUMBO]
 
 # Generate liquidacion_nomina crossing nomina_cali + facturacion (run at 10 PM)
 # Also sends email notification to coordinator
-python manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email] [--sede CALI|YUMBO]
+python web/manage.py liquidacion_nomina_diaria [--fecha YYYY-MM-DD] [--forzar] [--sin-email] [--sede CALI|YUMBO]
 ```
 
 Omitting `--sede` runs both CALI and YUMBO sequentially.
@@ -88,29 +72,20 @@ GET/POST /supervision/cron/nomina-cali/?token=<token>
 GET/POST /supervision/cron/liquidacion/?token=<token>
 ```
 
-### Google Sheets Initialization
-
-```bash
-# Initialize/sync Google Sheets headers (run once or after schema changes)
-python init_sheets_headers.py
-```
-
 ### Running Tests
 
 ```bash
-cd web
-
 # Run all tests
-python manage.py test
+python web/manage.py test
 
 # Run tecnicos app tests (metrics calculations)
-python manage.py test apps.tecnicos.tests
+python web/manage.py test apps.tecnicos.tests
 
 # Run a single test class
-python manage.py test apps.tecnicos.tests.ParsearHorasFormatoTest
+python web/manage.py test apps.tecnicos.tests.ParsearHorasFormatoTest
 
 # Run a single test method
-python manage.py test apps.tecnicos.tests.ParsearHorasFormatoTest.test_formato_hhmm_simple
+python web/manage.py test apps.tecnicos.tests.ParsearHorasFormatoTest.test_formato_hhmm_simple
 ```
 
 Test classes: `ParsearHorasFormatoTest`, `SafeFloatTest`, `ParsearHoraTest`, `CalculoMetricasLiquidacionTest`, `NominaCaliFiltroDiasTest`, `ParsearFechaTest`.
@@ -119,17 +94,17 @@ Test classes: `ParsearHorasFormatoTest`, `SafeFloatTest`, `ParsearHoraTest`, `Ca
 
 ### Core Pipeline
 
-The system is a 5-phase sequential pipeline defined in `main.py`:
+The pipeline is orchestrated by `web/apps/logistica/processor.py` (`HuelleroProcessor`), called from the web view on file upload:
 
 ```
 Input Excel → DataCleaner → StateInference → ShiftBuilder → Calculator → ExcelGenerator → Output Excel
 ```
 
-### Module responsibilities (`src/`)
+### Module responsibilities (`web/apps/logistica/pipeline/`)
 
 - **data_cleaner.py** — Loads Excel, standardizes columns (ID→CODIGO, Nombre→NOMBRE, Fecha/Hora→FECHA_HORA, Estado→ESTADO), converts types, removes duplicate records within 15 minutes keeping the LAST record of each group.
 - **state_inference.py** — Fills missing Entrada/Salida states using three methods in order: time-range heuristics, context from adjacent records, and employee historical patterns. Falls back to `INDEFINIDO`.
-- **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥20:00, exit next morning before 10:00) by assigning to the entry date. Post-processes incomplete PM entries as `nocturno_prospectivo` by pairing them with AM records from the next day. Produces complete and incomplete shift records.
+- **shift_builder.py** — Pairs entry/exit records into shifts per employee per day. Handles nocturnal shifts (entry ≥19:00, exit next morning before 10:00) by assigning to the entry date. Post-processes incomplete PM entries as `nocturno_prospectivo` by pairing them with AM records from the next day. Produces complete and incomplete shift records.
 - **calculator.py** — Counts AM/PM clock-ins, generates observation codes (OK, TURNO_NOCTURNO, SALIDA_NR, TURNO_LARGO, TRABAJO_DOMINICAL, etc.), and optionally merges employee master data (DOCUMENTO field) from `data/maestro/`. Also calls `rellenar_dias_faltantes()` to insert `SIN_REGISTROS` rows for days between an employee's first and last record that have no attendance. Nocturnal shifts crossing midnight are split into two rows.
 - **excel_generator.py** — Writes the 14-column report with color-coded rows (green=OK, blue=nocturnal, purple=salida_estandar_nocturna, yellow=minor, orange=alert, gray=sin_registros), frozen headers, and a summary sheet. Also generates a separate `CASOS_REVISION_*.xlsx` for records needing manual review.
 - **logger.py** — Dual-output logging (file + console) with statistics tracking across all phases.
@@ -160,13 +135,15 @@ Browser-based interface for file upload and processing. Deployed to Railway.
 
 `processor.py` loads data from these models via `_cargar_maestro_desde_db()`, `_cargar_horarios_por_codigo()`, and `_cargar_codigos_excluidos()` — the web context never reads Excel maestro files.
 
+**Note:** `_guardar_registros_en_db()` is currently disabled (returns empty results immediately). Processed attendance records are NOT persisted to `RegistroAsistencia` in the current version — results are returned only in the API response and the generated Excel files.
+
 #### Key Endpoints
 
 **Logística (`/logistica/`):**
 - `/logistica/` — Main dashboard (requires login)
 - `/logistica/api/procesar/` — POST: process uploaded huellero Excel; returns `{datos, conceptos, stats, db_stats, archivo, archivo_casos}`
 - `/logistica/api/registros/` — GET: list all saved attendance records from DB (same format as procesar response, `desde_db: true`)
-- `/logistica/api/registros/obs1/` — POST `{registro_id, obs1}`: save manual observation to `RegistroAsistencia.observaciones_1`
+- `/logistica/api/registros/obs1/` — **Disabled**: returns 400. Editing `OBSERVACIONES_1` via API is not currently supported.
 - `/logistica/api/descargar/<filename>/` — Download generated reports
 
 **Supervisión (`/supervision/`):**
@@ -320,7 +297,7 @@ All thresholds, time ranges, feature flags, directory paths, and format strings 
 - `UMBRAL_DUPLICADOS` (900s / 15 min) — duplicate detection window, keeps LAST record
 - `TOLERANCIA_HORARIO_MIN` (90 min) — max deviation from cargo schedule before falling back to global ranges
 - `RANGO_INFERENCIA_ENTRADA` / `RANGO_INFERENCIA_SALIDA` — fallback hour ranges (03–11 / 14–21)
-- `HORA_INICIO_TURNO_NOCTURNO` (20.0 / 20:00) — nocturnal shift detection threshold
+- `HORA_INICIO_TURNO_NOCTURNO` (19.0 / 19:00) — nocturnal shift detection threshold
 - `HORAS_MINIMAS_TURNO` / `HORAS_MAXIMAS_TURNO` (4/16) — shift duration validation bounds
 - `HORAS_LIMITE_JORNADA` (9.8) — maximum hours per workday, triggers `EXCEDE_JORNADA` observation
 - Feature flags: `PERMITIR_INFERENCIA`, `ELIMINAR_DUPLICADOS_AUTO`, `GENERAR_HOJA_RESUMEN`, `GENERAR_CASOS_ESPECIALES`

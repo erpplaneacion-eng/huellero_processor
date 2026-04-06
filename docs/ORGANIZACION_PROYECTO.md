@@ -1,35 +1,50 @@
-﻿# Organizacion del Proyecto
+# Organizacion del Proyecto
 
 ## Vista general
-Este repositorio contiene dos componentes en una misma raiz:
 
-1. Procesador CLI de huellero (main.py, config.py, src/)
-2. Aplicacion web Django (web/)
+Este repositorio contiene una aplicacion Django en `web/` que integra el procesamiento de huellero para el area de Logistica.
 
-## Estructura actual recomendada
+Arquitectura actual:
 
-- main.py: punto de entrada CLI
-- config.py: configuracion central del procesador
-- src/: logica del pipeline de procesamiento
-- data/input/: archivos de entrada de huellero
-- data/output/: reportes generados
-- data/maestro/: maestro de empleados
-- data/maestro/fuentes/: excels de referencia historicos (antes archivos_excel/)
-- logs/: logs de ejecucion del procesador
-- web/: proyecto Django completo (apps, templates, static, manage.py)
-- docs/: documentacion interna del proyecto
+1. Capa web (autenticacion, vistas, dashboard, APIs).
+2. Pipeline de negocio embebido en `web/apps/logistica/pipeline/`.
+3. Persistencia en BD de maestro y registros procesados.
+
+## Estructura recomendada
+
+- `web/`: proyecto Django autocontenido.
+- `web/apps/users/`: login, logout y redireccion por area.
+- `web/apps/logistica/`: modelos, vistas y orquestador (`processor.py`).
+- `web/apps/logistica/pipeline/`: limpieza, inferencia, turnos, calculo y generacion de Excel.
+- `data/input/`: archivos de entrada del huellero.
+- `data/output/`: reportes generados.
+- `data/maestro/`: archivo maestro (`empleados.xlsx`).
+- `logs/`: logs de ejecucion del pipeline.
+- `docs/`: documentacion interna.
 
 ## Convenciones practicas
 
-- Todo archivo fuente/insumo debe entrar por data/.
-- Evitar carpetas sueltas en raiz para datos operativos.
-- logs/, data/input/, data/output/, data/maestro/ se consideran datos de entorno (no versionar contenido).
-- Mantener web/ como bloque autocontenido de la app Django.
+- Todo insumo operacional entra por `data/`.
+- Evitar credenciales o secretos en archivos versionados.
+- Versionar codigo y configuracion; no versionar contenido operativo de `data/` ni `logs/`.
+- Mantener `web/` como bloque principal de ejecucion y despliegue.
 
-## Proximo paso sugerido
+## Comandos base
 
-Si quieres una limpieza mas profunda, el siguiente paso es separar en monorepo explicito:
+Desde la raiz del repo:
 
-- apps/processor/ para CLI
-- apps/web/ para Django
-- wrappers de compatibilidad para no romper comandos existentes.
+```bash
+python web/manage.py migrate
+python web/manage.py check
+python web/manage.py runserver
+```
+
+Carga de maestro:
+
+```bash
+python web/manage.py cargar_maestro
+```
+
+## Nota historica
+
+Referencias antiguas a `main.py`, `config.py` y `src/` en la raiz corresponden a una estructura anterior y ya no aplican en el estado actual del proyecto.
