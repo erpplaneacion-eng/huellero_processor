@@ -1,6 +1,5 @@
 ﻿/**
- * Frontend Logistica: dashboard bajo demanda + carga de Excel en modal.
- * No carga historial desde BD.
+ * Frontend Logistica: dashboard por defecto + carga de Excel en modal.
  */
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -52,13 +51,23 @@ document.addEventListener('DOMContentLoaded', function () {
         cargaResumen.classList.remove('is-visible');
     }
 
+    function safeText(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     function mostrarResumenCarga(result) {
         if (!cargaResumen) return;
 
         const stats = result.stats || {};
+        const dbStats = result.db_stats || {};
         const duplicados = Number(stats.duplicados_eliminados || 0);
         const alertaDuplicados = duplicados > 0
-            ? `<div class="carga-modal__alerta">Aviso: se detectaron y eliminaron ${duplicados} duplicados en este archivo.</div>`
+            ? `<div class="carga-modal__alerta">⚠ Se detectaron y eliminaron ${duplicados} duplicados en este archivo.</div>`
             : '';
 
         cargaResumen.innerHTML = `
@@ -68,7 +77,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <li><strong>Registros:</strong> ${Number(stats.total_registros || 0)}</li>
                 <li><strong>Duplicados eliminados:</strong> ${duplicados}</li>
                 <li><strong>Estados inferidos:</strong> ${Number(stats.estados_inferidos || 0)}</li>
-                <li><strong>Persistencia:</strong> deshabilitada (solo maestro en BD)</li>
+                <li><strong>BD nuevos:</strong> ${Number(dbStats.creados || 0)} | <strong>existentes:</strong> ${Number(dbStats.existentes || 0)} | <strong>errores:</strong> ${Number(dbStats.errores || 0)}</li>
             </ul>
         `;
         cargaResumen.classList.add('is-visible');
@@ -98,17 +107,37 @@ document.addEventListener('DOMContentLoaded', function () {
         clearResumenCarga();
     }
 
-    function renderEstadoInicial() {
+    async function cargarDashboardDesdeBD() {
         if (!dashboardSection) return;
         dashboardSection.innerHTML = `
             <div class="card">
-                <h2 class="card__title"><span class="card__title-icon">Archivo</span>Sube y procesa un archivo</h2>
-                <p class="result__message">Los resultados se muestran en esta sesion y no se guardan en base de datos.</p>
-                <div class="result__actions">
-                    <button class="btn btn--primary" onclick="cargarOtroArchivo()">Cargar archivo</button>
-                </div>
+                <h2 class="card__title"><span class="card__title-icon">⏳</span>Cargando dashboard...</h2>
+                <p class="result__message">Consultando registros procesados.</p>
             </div>
         `;
+
+        try {
+            const url = AREA_CONFIG.apiListarRegistros + '?page=1';
+            const response = await fetch(url, { method: 'GET' });
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'No fue posible cargar registros.');
+            }
+
+            renderizarDashboard(result, AREA_CONFIG);
+        } catch (error) {
+            dashboardSection.innerHTML = `
+                <div class="card result--error">
+                    <div class="result__icon">❌</div>
+                    <div class="result__title">No se pudo cargar el dashboard</div>
+                    <div class="result__error">${error.message}</div>
+                    <div class="result__actions">
+                        <button class="btn btn--primary" onclick="recargarDashboard()">Reintentar</button>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     async function procesarArchivo() {
@@ -140,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 result = await response.json();
             } catch (_e) {
-                throw new Error('El servidor respondio con un formato no esperado.');
+                throw new Error('El servidor respondió con un formato no esperado.');
             }
 
             if (!response.ok || !result.success) {
@@ -150,19 +179,21 @@ document.addEventListener('DOMContentLoaded', function () {
             renderizarDashboard(result, AREA_CONFIG);
             mostrarResumenCarga(result);
 
+            // Cuenta regresiva y cierre automático para que el usuario
+            // pueda leer el resumen y luego ver los botones en el dashboard
             let seg = 5;
             const tick = setInterval(() => {
                 seg--;
-                setEstadoCarga(`Procesado. Cerrando en ${seg}s...`, 'success');
+                setEstadoCarga(`✔ Procesado. Cerrando en ${seg}s…`, 'success');
                 if (seg <= 0) {
                     clearInterval(tick);
                     cerrarModalCarga();
                 }
             }, 1000);
-            setEstadoCarga(`Procesado. Cerrando en ${seg}s...`, 'success');
+            setEstadoCarga(`✔ Procesado. Cerrando en ${seg}s…`, 'success');
         } catch (error) {
             if (error && error.name === 'AbortError') {
-                setEstadoCarga('El procesamiento tardo demasiado (timeout de 5 minutos). Intenta con un archivo mas pequeno o revisa logs.', 'error');
+                setEstadoCarga('El procesamiento tardó demasiado (timeout de 5 minutos). Intenta con un archivo más pequeño o revisa logs.', 'error');
             } else {
                 setEstadoCarga(error.message || 'Error de conexion con el servidor.', 'error');
             }
@@ -211,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function () {
     window.abrirModalCarga = abrirModalCarga;
     window.cerrarModalCarga = cerrarModalCarga;
     window.cargarOtroArchivo = abrirModalCarga;
-    window.recargarDashboard = renderEstadoInicial;
+    window.recargarDashboard = cargarDashboardDesdeBD;
 
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && cargaModal && cargaModal.classList.contains('carga-modal--open')) {
@@ -219,5 +250,5 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    renderEstadoInicial();
+    cargarDashboardDesdeBD();
 });

@@ -4,11 +4,14 @@
  */
 
 /* ===== Estado del módulo ===== */
-let _dashEmpleados = [];       // lista completa
-let _dashFiltrados = [];       // lista tras búsqueda
-let _dashResult = null;        // resultado completo de la API
+let _dashEmpleados = [];       // lista acumulada de empleados cargados
+let _dashFiltrados = [];       // lista tras búsqueda/filtro
+let _dashResult = null;        // resultado de la última llamada a la API
 let _dashAreaConfig = null;    // AREA_CONFIG
 let _dashMesFiltro = '';       // "YYYY-MM" o '' para todos
+let _dashPage = 1;             // página actual
+let _dashHasMore = false;      // si hay más empleados por cargar
+let _dashCargandoMas = false;  // guard para evitar doble clic
 const _PDF_CLASES_EXCLUIDAS = new Set(['fila--verde', 'fila--gris', 'fila--naranja', 'fila--azul']);
 
 /* ===== Punto de entrada ===== */
@@ -18,6 +21,8 @@ function renderizarDashboard(result, areaConfig) {
     _dashEmpleados = result.datos || [];
     _dashFiltrados = _dashEmpleados.slice();
     _dashMesFiltro = '';
+    _dashPage = result.page || 1;
+    _dashHasMore = result.has_more || false;
 
     const section = document.getElementById('dashboardSection');
     section.style.display = 'block';
@@ -29,6 +34,9 @@ function renderizarDashboard(result, areaConfig) {
 
     document.getElementById('dashBuscador').addEventListener('input', function () {
         filtrarEmpleados(this.value.trim());
+    });
+    document.getElementById('dashMes').addEventListener('change', function () {
+        filtrarPorMes(this.value);
     });
 }
 
@@ -47,17 +55,20 @@ function _construirHTML() {
         ${_renderizarHeader(stats, archivo, urlCasos)}
         <div id="dashStatsBar">${_renderizarStatsBar(resumen)}</div>
         <div class="dashboard-search">
-            <select id="dashMes" class="mes-select" onchange="filtrarPorMes(this.value)">
+            <select id="dashMes" class="mes-select">
                 <option value="">📅 Todos los meses</option>
                 ${opcionesMeses}
             </select>
             <input id="dashBuscador" type="text" placeholder="🔍 Buscar por nombre o código...">
         </div>
         <div class="dashboard-count" id="dashCount">
-            Mostrando ${_dashEmpleados.length} de ${_dashEmpleados.length} empleados
+            Mostrando ${_dashEmpleados.length} de ${stats.empleados_unicos} empleados
         </div>
         <div id="dashLista">
             ${renderizarEmpleados(_dashEmpleados)}
+        </div>
+        <div id="dashCargarMas">
+            ${_renderizarBotonCargarMas()}
         </div>
         ${_renderizarLeyenda()}
     `;
@@ -271,46 +282,129 @@ function toggleEmpleado(codigo) {
     }
 }
 
-/* ===== Filtrar por mes ===== */
-function filtrarPorMes(mes) {
-    _dashMesFiltro = mes;
-    const q = (document.getElementById('dashBuscador') || {}).value || '';
-    filtrarEmpleados(q.trim());
+/* ===== Utilidad: debounce ===== */
+function _debounce(fn, ms) {
+    let timer;
+    return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), ms);
+    };
 }
 
-/* ===== Filtrar por búsqueda (y mes si está activo) ===== */
-function filtrarEmpleados(query) {
-    const q = query.toLowerCase();
+/* ===== Filtrar por mes (servidor) ===== */
+function filtrarPorMes(mes) {
+    _dashMesFiltro = mes;
+    const search = (document.getElementById('dashBuscador') || {}).value || '';
+    _ejecutarFiltroServidor(search.trim(), mes);
+}
 
-    _dashFiltrados = _dashEmpleados
-        .map(emp => {
-            // Filtrar registros por mes si hay mes seleccionado
-            const registros = _dashMesFiltro
-                ? emp.registros.filter(reg => {
-                    const p = (reg.fecha || '').split('/');
-                    return p.length === 3 && `${p[2]}-${p[1]}` === _dashMesFiltro;
-                })
-                : emp.registros;
-            return { ...emp, registros };
-        })
-        .filter(emp =>
-            emp.registros.length > 0 &&
-            (!q ||
-                emp.nombre.toLowerCase().includes(q) ||
-                emp.codigo.includes(q) ||
-                (emp.documento && emp.documento.includes(q))
-            )
-        );
+/* ===== Filtrar por búsqueda — con debounce 400ms ===== */
+const filtrarEmpleados = _debounce(function (query) {
+    _ejecutarFiltroServidor(query, _dashMesFiltro);
+}, 400);
 
-    document.getElementById('dashLista').innerHTML = renderizarEmpleados(_dashFiltrados);
-    document.getElementById('dashCount').textContent =
-        `Mostrando ${_dashFiltrados.length} de ${_dashEmpleados.length} empleados`;
+/* ===== Núcleo: llama al servidor con search + mes ===== */
+async function _ejecutarFiltroServidor(search, mes) {
+    const filtrado = search || mes;
+    const lista = document.getElementById('dashLista');
+    const count = document.getElementById('dashCount');
+    const contenedorMas = document.getElementById('dashCargarMas');
 
-    // Actualizar barra de stats con los datos filtrados
+    // Sin filtro: restaurar vista paginada original
+    if (!filtrado) {
+        _dashFiltrados = _dashEmpleados.slice();
+        if (lista) lista.innerHTML = renderizarEmpleados(_dashEmpleados);
+        if (contenedorMas) contenedorMas.innerHTML = _renderizarBotonCargarMas();
+        _actualizarContadorYStats(_dashEmpleados);
+        return;
+    }
+
+    // Con filtro: consultar servidor
+    if (lista) lista.innerHTML = '<div class="dashboard-empty" style="padding:32px">🔍 Buscando...</div>';
+    if (contenedorMas) contenedorMas.innerHTML = '';
+
+    try {
+        const url = new URL(_dashAreaConfig.apiListarRegistros, window.location.origin);
+        if (search) url.searchParams.set('search', search);
+        if (mes) url.searchParams.set('mes', mes);
+
+        const response = await fetch(url.toString(), { method: 'GET' });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) throw new Error(result.error || 'Error al filtrar.');
+
+        _dashFiltrados = result.datos || [];
+        if (lista) lista.innerHTML = renderizarEmpleados(_dashFiltrados);
+        _actualizarContadorYStats(_dashFiltrados, result.datos.length);
+
+    } catch (err) {
+        if (lista) lista.innerHTML = `<div class="dashboard-empty" style="color:#c0392b;padding:32px">❌ ${err.message}</div>`;
+    }
+}
+
+/* ===== Actualizar contador y barra de colores ===== */
+function _actualizarContadorYStats(lista, encontrados) {
+    const totalGlobal = (_dashResult && _dashResult.stats) ? _dashResult.stats.empleados_unicos : _dashEmpleados.length;
+    const mostrando = encontrados !== undefined ? encontrados : lista.length;
+    const count = document.getElementById('dashCount');
+    if (count) count.textContent = `Mostrando ${mostrando} de ${totalGlobal} empleados`;
+
     const statsBar = document.getElementById('dashStatsBar');
-    if (statsBar) {
-        const resumen = calcularResumenGlobal(_dashFiltrados);
-        statsBar.innerHTML = _renderizarStatsBar(resumen);
+    if (statsBar) statsBar.innerHTML = _renderizarStatsBar(calcularResumenGlobal(lista));
+}
+
+/* ===== Botón cargar más ===== */
+function _renderizarBotonCargarMas() {
+    if (!_dashHasMore) return '';
+    return `
+        <div style="text-align:center;padding:20px 0">
+            <button class="btn btn--primary" id="btnCargarMas" onclick="cargarMasEmpleados()">
+                ⬇ Cargar más empleados
+            </button>
+        </div>
+    `;
+}
+
+async function cargarMasEmpleados() {
+    if (_dashCargandoMas || !_dashHasMore) return;
+    _dashCargandoMas = true;
+
+    const btn = document.getElementById('btnCargarMas');
+    if (btn) { btn.disabled = true; btn.textContent = 'Cargando...'; }
+
+    try {
+        const nextPage = _dashPage + 1;
+        const url = _dashAreaConfig.apiListarRegistros + '?page=' + nextPage;
+        const response = await fetch(url, { method: 'GET' });
+        const result = await response.json();
+
+        if (!response.ok || !result.success) throw new Error(result.error || 'Error al cargar más.');
+
+        // Acumular empleados
+        _dashEmpleados = _dashEmpleados.concat(result.datos || []);
+        _dashFiltrados = _dashEmpleados.slice();
+        _dashPage = result.page || nextPage;
+        _dashHasMore = result.has_more || false;
+
+        // Agregar nuevas tarjetas al DOM (sin re-renderizar todo)
+        const lista = document.getElementById('dashLista');
+        if (lista) {
+            lista.insertAdjacentHTML('beforeend', renderizarEmpleados(result.datos || []));
+        }
+
+        // Actualizar contador y botón
+        const count = document.getElementById('dashCount');
+        if (count) {
+            count.textContent = `Mostrando ${_dashEmpleados.length} de ${_dashResult.stats.empleados_unicos} empleados`;
+        }
+        const contenedor = document.getElementById('dashCargarMas');
+        if (contenedor) contenedor.innerHTML = _renderizarBotonCargarMas();
+
+    } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = '⬇ Cargar más empleados'; }
+        console.error('Error cargando más empleados:', err);
+    } finally {
+        _dashCargandoMas = false;
     }
 }
 

@@ -32,20 +32,27 @@ class HuelleroProcessor:
 
     def _guardar_registros_en_db(self, df_resultado):
         """
-        Metodo legado deshabilitado.
-        Los registros de asistencia ya no se persisten en BD.
+        Guarda df_resultado en la tabla RegistroAsistencia usando operaciones bulk.
+        - INSERT para registros nuevos
+        - UPDATE para registros existentes: actualiza todos los campos del pipeline
+          y preserva observaciones_1 (anotación manual del usuario).
 
         Returns:
-            lookup vacio y estadisticas en cero
+            (
+                dict {(codigo, fecha_str, hora_ingreso): {'id', 'obs1'}},
+                {'creados': int, 'existentes': int, 'errores': int}
+            )
         """
-        logger.info("Persistencia de RegistroAsistencia deshabilitada: no se guardan resultados en BD.")
-        return {}, {'creados': 0, 'existentes': 0, 'errores': 0}
-
-        # --- Implementacion antigua (no usada) ---
         import math
         from datetime import datetime
         from django.db import transaction
         from apps.logistica.models import RegistroAsistencia
+
+        CAMPOS_UPDATE = [
+            'nombre', 'documento', 'cargo', 'dia',
+            'marcaciones_am', 'marcaciones_pm',
+            'hora_salida', 'total_horas', 'limite_horas_dia', 'observacion',
+        ]
 
         def _sfloat(v):
             try:
@@ -88,24 +95,26 @@ class HuelleroProcessor:
         codigos = {f['codigo'] for f in filas}
         fechas  = {f['fecha']  for f in filas}
 
-        # ── 1 SELECT: todos los registros existentes para estos empleados y fechas ──
+        # ── SELECT: registros existentes (objeto completo para poder hacer bulk_update) ──
         existentes_db = {
-            (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): {
-                'id': r.id, 'obs1': r.observaciones_1,
-            }
-            for r in RegistroAsistencia.objects.filter(
-                codigo__in=codigos, fecha__in=fechas
-            ).only('id', 'codigo', 'fecha', 'hora_ingreso', 'observaciones_1')
+            (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): r
+            for r in RegistroAsistencia.objects.filter(codigo__in=codigos, fecha__in=fechas)
         }
 
-        # Determinar qué filas son nuevas
-        nuevos_filas = [
-            f for f in filas
-            if (f['codigo'], f['fecha_str'], f['hora_ingreso']) not in existentes_db
-        ]
+        # Separar nuevos vs existentes
+        nuevos_filas = []
+        a_actualizar = []  # list of (objeto_db, fila_nueva)
 
-        creados = errores = 0
+        for f in filas:
+            key = (f['codigo'], f['fecha_str'], f['hora_ingreso'])
+            if key in existentes_db:
+                a_actualizar.append((existentes_db[key], f))
+            else:
+                nuevos_filas.append(f)
 
+        creados = actualizados = errores = 0
+
+        # ── INSERT nuevos ──
         if nuevos_filas:
             objs = []
             for f in nuevos_filas:
@@ -132,41 +141,58 @@ class HuelleroProcessor:
 
             if objs:
                 try:
-                    # ── 1 INSERT bulk para todos los nuevos ──
                     with transaction.atomic():
                         RegistroAsistencia.objects.bulk_create(objs, ignore_conflicts=True)
                     creados = len(objs)
-
-                    # Re-fetch para obtener IDs de los recién creados
-                    nuevos_codigos = {f['codigo'] for f in nuevos_filas}
-                    nuevos_fechas  = {f['fecha']  for f in nuevos_filas}
-                    nuevos_db = {
-                        (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): {
-                            'id': r.id, 'obs1': r.observaciones_1,
-                        }
-                        for r in RegistroAsistencia.objects.filter(
-                            codigo__in=nuevos_codigos, fecha__in=nuevos_fechas
-                        ).only('id', 'codigo', 'fecha', 'hora_ingreso', 'observaciones_1')
-                    }
-                    existentes_db.update(nuevos_db)
                 except Exception as e:
                     errores += len(objs)
                     logger.warning(f"Error en bulk_create: {e}")
 
-        existentes_count = len(filas) - len(nuevos_filas)
+        # ── UPDATE existentes (preserva observaciones_1) ──
+        if a_actualizar:
+            objs_update = []
+            for obj, f in a_actualizar:
+                obj.nombre           = f['nombre']
+                obj.documento        = f['documento']
+                obj.cargo            = f['cargo']
+                obj.dia              = f['dia']
+                obj.marcaciones_am   = f['marcaciones_am']
+                obj.marcaciones_pm   = f['marcaciones_pm']
+                obj.hora_salida      = f['hora_salida']
+                obj.total_horas      = f['total_horas']
+                obj.limite_horas_dia = f['limite_horas_dia']
+                obj.observacion      = f['observacion']
+                # observaciones_1 NO se toca — es anotación manual del usuario
+                objs_update.append(obj)
+            try:
+                with transaction.atomic():
+                    RegistroAsistencia.objects.bulk_update(objs_update, CAMPOS_UPDATE)
+                actualizados = len(objs_update)
+            except Exception as e:
+                errores += len(objs_update)
+                logger.warning(f"Error en bulk_update: {e}")
 
-        # Construir lookup final
+        # Re-fetch para construir lookup con IDs y obs1 actuales
+        final_db = {
+            (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): {
+                'id': r.id, 'obs1': r.observaciones_1,
+            }
+            for r in RegistroAsistencia.objects.filter(
+                codigo__in=codigos, fecha__in=fechas
+            ).only('id', 'codigo', 'fecha', 'hora_ingreso', 'observaciones_1')
+        }
+
         lookup = {
-            (f['codigo'], f['fecha_str'], f['hora_ingreso']): existentes_db.get(
+            (f['codigo'], f['fecha_str'], f['hora_ingreso']): final_db.get(
                 (f['codigo'], f['fecha_str'], f['hora_ingreso']), {}
             )
             for f in filas
         }
 
-        logger.info(f"Registros BD — nuevos: {creados} | ya existían: {existentes_count} | errores: {errores}")
+        logger.info(f"Registros BD — nuevos: {creados} | actualizados: {actualizados} | errores: {errores}")
         return lookup, {
             'creados': int(creados),
-            'existentes': int(existentes_count),
+            'existentes': int(actualizados),
             'errores': int(errores),
         }
 
@@ -326,6 +352,9 @@ class HuelleroProcessor:
             # Generar casos especiales
             ruta_casos = generator.generar_casos_especiales(df_resultado)
 
+            # ===== GUARDAR EN BASE DE DATOS =====
+            db_lookup, db_stats = self._guardar_registros_en_db(df_resultado)
+
             # ===== FIN DEL PROCESO =====
             logger.log_fin_proceso(exito=True)
 
@@ -333,8 +362,8 @@ class HuelleroProcessor:
             nombre_archivo = os.path.basename(ruta_salida)
             nombre_casos = os.path.basename(ruta_casos) if ruta_casos else None
 
-            # Serializar datos para el dashboard frontend (sin persistencia en BD)
-            datos = self._serializar_datos(df_resultado, db_lookup=None, horarios_por_codigo=horarios_por_codigo)
+            # Serializar datos para el dashboard frontend (con IDs de BD)
+            datos = self._serializar_datos(df_resultado, db_lookup, horarios_por_codigo)
 
             # Opciones de conceptos para el dropdown en el dashboard
             from apps.logistica.models import Concepto
@@ -345,7 +374,7 @@ class HuelleroProcessor:
                 'archivo': nombre_archivo,
                 'archivo_casos': nombre_casos,
                 'stats': stats,
-                'db_stats': {'creados': 0, 'existentes': 0, 'errores': 0},
+                'db_stats': db_stats,
                 'area': self.area,
                 'datos': datos,
                 'conceptos': conceptos,

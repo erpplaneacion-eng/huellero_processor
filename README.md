@@ -1,142 +1,148 @@
 # Sistema Procesador de Huellero
 
-Aplicacion web Django para procesar archivos de asistencia (huellero), generar reportes en Excel y administrar observaciones de novedades.
+Sistema web para procesar archivos de control de asistencia (huellero biométrico) y generar reportes de nómina. Construido para Corporación Hacia un Valle Solidario (CHVS).
 
-## Estado Actual (Abril 2026)
+## Características
 
-Este repositorio ya no usa `main.py` ni `src/` en la raiz.
-La arquitectura actual es:
-
-1. Aplicacion web Django en `web/`.
-2. Pipeline de procesamiento en `web/apps/logistica/pipeline/`.
-
-## Caracteristicas
-
-- Limpieza automatica de marcaciones duplicadas.
-- Inferencia de estados faltantes (Entrada/Salida).
-- Deteccion de turnos nocturnos y reglas especiales.
-- Calculo de horas trabajadas y validaciones de jornada.
-- Generacion de Excel de resultados y casos especiales.
-- Persistencia de resultados en base de datos (`RegistroAsistencia`).
-- Dashboard web para consulta, filtros, descarga y observacion manual.
+- Limpieza automática de marcaciones duplicadas (ventana de 15 min)
+- Inferencia inteligente de estados faltantes (Entrada/Salida)
+- Detección y manejo de turnos nocturnos
+- Generación de reportes Excel con formato profesional y códigos de observación
+- Interfaz web con subida de archivos y visualización de resultados
+- Base de datos PostgreSQL con historial de asistencia
+- Despliegue en Railway
 
 ## Estructura del Proyecto
 
-```text
+```
 huellero_processor/
-|-- data/
-|   |-- input/                  # Archivos de huellero cargados
-|   |-- output/                 # Excels generados
-|   `-- maestro/                # Excel maestro (empleados.xlsx)
-|-- docs/
-|   `-- ORGANIZACION_PROYECTO.md
-|-- logs/                       # Logs del procesamiento
-|-- web/
-|   |-- manage.py               # Entrada de comandos Django
-|   |-- huellero_web/           # Settings, urls, wsgi
-|   |-- apps/
-|   |   |-- users/              # Login y redireccion por area
-|   |   `-- logistica/
-|   |       |-- views.py        # Endpoints y vistas del area
-|   |       |-- models.py       # Maestro y registros de asistencia
-|   |       |-- processor.py    # Orquestador del pipeline
-|   |       `-- pipeline/       # data_cleaner, inference, turnos, calculo, excel
-|   |-- templates/
-|   `-- static/
-|-- requirements.txt
-|-- Procfile
-`-- railway.json
+├── web/
+│   ├── manage.py
+│   ├── apps/
+│   │   ├── logistica/              # App principal
+│   │   │   ├── pipeline/           # Módulos del pipeline de procesamiento
+│   │   │   │   ├── config.py       # Umbrales, rangos horarios, feature flags
+│   │   │   │   ├── data_cleaner.py
+│   │   │   │   ├── state_inference.py
+│   │   │   │   ├── shift_builder.py
+│   │   │   │   ├── calculator.py
+│   │   │   │   └── excel_generator.py
+│   │   │   ├── processor.py        # Orquestador del pipeline
+│   │   │   ├── models.py           # Modelos PostgreSQL
+│   │   │   ├── views.py            # API endpoints
+│   │   │   └── management/commands/cargar_maestro.py
+│   │   └── users/                  # Autenticación y roles
+│   └── huellero_web/               # Configuración Django
+│
+├── data/
+│   ├── input/                      # Archivos .xls/.xlsx del huellero
+│   ├── output/                     # Reportes generados
+│   └── maestro/
+│       └── empleados.xlsx          # Maestro de empleados (fuente de cédulas)
+│
+├── .env                            # Variables de entorno (no versionado)
+├── requirements.txt
+└── railway.json
 ```
 
-## Instalacion
-
-Requisitos:
-
-- Python 3.10+ recomendado.
-- `pip`.
-
-Instalar dependencias:
+## Instalación y Desarrollo
 
 ```bash
+# Instalar dependencias
+cd web
 pip install -r requirements.txt
+
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con los valores correspondientes
+
+# Crear base de datos
+python manage.py migrate
+
+# Cargar datos maestro de empleados
+python manage.py cargar_maestro
+
+# Crear usuario administrador
+python manage.py createsuperuser
+
+# Levantar servidor de desarrollo
+python manage.py runserver
 ```
 
-## Ejecucion Local
+## Cargar Maestro de Empleados
 
-Desde la raiz del repo:
+El maestro se carga desde `data/maestro/empleados.xlsx`, que debe tener estas hojas:
+
+| Hoja | Tabla DB | Contenido |
+|------|----------|-----------|
+| `empleados_ejemplo` | `maestro_empleado` | CODIGO, NOMBRE, DOCUMENTO, CARGO |
+| `horas_cargos` | `maestro_cargo` | id_cargo, cargo, horas_dia, horas_semana |
+| `horarios` | `maestro_horario` | id_horario, hora_inicio, hora_fin |
+| `cargos_horarios` | `maestro_cargo_horario` | id_cargo, id_horario |
+| `conceptos` | `maestro_concepto` | observaciones, procesos |
 
 ```bash
-python web/manage.py migrate
-python web/manage.py collectstatic --noinput
-python web/manage.py runserver
+python manage.py cargar_maestro                        # carga normal
+python manage.py cargar_maestro --limpiar              # borra todo y recarga
+python manage.py cargar_maestro --ruta /otra/ruta.xlsx # ruta personalizada
 ```
 
-Abrir:
+## Archivo de Salida (Excel)
 
-- `http://127.0.0.1:8000/users/login/`
+| Columna | Descripción |
+|---------|-------------|
+| CODIGO COLABORADOR | ID del empleado (del huellero) |
+| NOMBRE COMPLETO DEL COLABORADOR | Nombre completo |
+| DOCUMENTO DEL COLABORADOR | Cédula (tomada de `maestro_empleado`) |
+| FECHA | Fecha del turno (DD/MM/YYYY) |
+| DIA | Día de la semana |
+| # MARCACIONES AM | Marcaciones 06:00–11:59 |
+| # MARCACIONES PM | Marcaciones 12:00–23:59 |
+| HORA DE INGRESO | Hora de entrada |
+| HORA DE SALIDA | Hora de salida |
+| TOTAL HORAS LABORADAS | Horas trabajadas |
+| OBSERVACION | Códigos automáticos de alerta |
 
-## Flujo de Uso
+## Tipos de Observaciones
 
-1. Iniciar sesion.
-2. Entrar al area de Logistica (`/logistica/`).
-3. Cargar archivo `.xls` o `.xlsx` desde el modal del dashboard.
-4. El sistema procesa, guarda en BD y devuelve estadisticas.
-5. Desde el dashboard se puede:
-- Filtrar por mes, empleado o documento.
-- Descargar Excel de registros por rango de fechas.
-- Descargar PDF de novedades.
-- Guardar `OBSERVACIONES_1` por registro.
+| Código | Significado |
+|--------|-------------|
+| `OK` | Turno completo sin problemas |
+| `TURNO_NOCTURNO` | Entrada ≥ 20:00, salida en madrugada |
+| `SALIDA_NR` | Salida no registrada |
+| `ENTRADA_NR` | Entrada no registrada |
+| `ESTADO_INFERIDO` | Estado deducido por contexto |
+| `DUPLICADOS_ELIM` | Marcaciones duplicadas eliminadas |
+| `TURNO_LARGO` | Más de 16 horas |
+| `TURNO_CORTO` | Menos de 4 horas |
+| `EXCEDE_JORNADA` | Supera límite de horas del cargo (9.8h) |
+| `TRABAJO_DOMINICAL` | Turno en domingo |
+| `SIN_REGISTROS` | Día sin marcaciones (entre primer y último registro) |
 
-## Carga de Maestro de Empleados
+## Variables de Entorno
 
-Comando de gestion:
+Ver `web/.env.example` para la lista completa. Las principales:
 
-```bash
-python web/manage.py cargar_maestro
+```env
+DEBUG=True
+SECRET_KEY=...
+DATABASE_URL=...                        # PostgreSQL en producción
+GOOGLE_CREDENTIALS_JSON=...            # Credenciales Google Sheets (producción)
+GOOGLE_CREDENTIALS_FILE=credentials/nomina.json  # Alternativa local
+GOOGLE_SHEET_ID=...
+EMAIL_HOST_USER=...
+EMAIL_HOST_PASSWORD=...                # App Password de Google (16 chars)
+WEBHOOK_SECRET_TOKEN=...
 ```
-
-Opciones:
-
-```bash
-python web/manage.py cargar_maestro --ruta data/maestro/empleados.xlsx
-python web/manage.py cargar_maestro --limpiar
-```
-
-Hojas esperadas en el archivo maestro:
-
-- `horas_cargos`
-- `horarios`
-- `cargos_horarios`
-- `empleados_ejemplo`
-- `conceptos`
-
-## Configuracion Clave
-
-- Django: `web/huellero_web/settings.py`
-- Pipeline: `web/apps/logistica/pipeline/config.py`
-
-Variables de entorno relevantes:
-
-- `DJANGO_ENV`
-- `DEBUG`
-- `SECRET_KEY`
-- `ALLOWED_HOSTS`
-- `DATABASE_URL`
-- `CSRF_TRUSTED_ORIGINS`
 
 ## Despliegue (Railway)
 
-Configurado en `railway.json` para:
+El despliegue es automático vía git push. Railway ejecuta:
+1. `python manage.py migrate`
+2. `python manage.py collectstatic`
+3. `gunicorn huellero_web.wsgi`
 
-1. Ejecutar migraciones.
-2. Ejecutar `collectstatic`.
-3. Levantar `gunicorn`.
 
-## Notas de Seguridad
 
-- No incluir credenciales en archivos versionados.
-- Usar variables de entorno para secretos y accesos.
-
-## Licencia
-
-Uso interno - Corporacion Hacia un Valle Solidario.
+---
+**Uso interno — Corporación Hacia un Valle Solidario**
