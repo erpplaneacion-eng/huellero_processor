@@ -5,43 +5,57 @@
 
 {% block container_class %}container-fluid{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/logistica.css' %}">
+{% endblock %}
+
 {% block content %}
 <header class="header">
     <h1 class="header__title">Procesador de Huellero</h1>
-    <p class="header__subtitle">Corporacion Hacia un Valle Solidario</p>
+    <p class="header__subtitle">Corporación Hacia un Valle Solidario</p>
 </header>
 
-<section id="uploadSection" class="dashboard-section">
-    <div class="card" style="text-align:center; padding: 3rem 2rem;">
-        <h2 class="card__title" style="justify-content:center;">
-            <span class="card__title-icon">📂</span>
-            Cargar archivo de huellero
-        </h2>
-        <p class="result__message" style="margin: 1rem 0 2rem;">
-            Sube un archivo Excel (.xls o .xlsx) exportado del huellero biométrico para generar el reporte de asistencia.
+<section id="uploadSection" class="page-section">
+    <div class="upload-card">
+        <div class="upload-card__icon">📂</div>
+        <h2 class="upload-card__title">Cargar archivo de huellero</h2>
+        <p class="upload-card__desc">
+            Sube un archivo Excel (.xls o .xlsx) exportado del huellero biométrico
+            para generar el reporte de asistencia.
         </p>
-        <button class="btn btn--primary" onclick="abrirModalCarga()">Seleccionar archivo Excel</button>
+        <button class="btn btn--primary btn--lg" onclick="abrirModalCarga()">
+            Seleccionar archivo Excel
+        </button>
     </div>
 </section>
 
-<section id="resultSection" style="display:none;" class="dashboard-section"></section>
+<section id="resultSection" class="page-section" style="display:none;"></section>
 
-<div id="cargaModal" class="carga-modal" aria-hidden="true">
-    <div class="carga-modal__overlay" onclick="cerrarModalCarga()"></div>
-    <div class="carga-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="cargaModalTitle">
-        <div class="carga-modal__header">
-            <h2 id="cargaModalTitle">Cargar Excel de Huellero</h2>
-            <button type="button" class="carga-modal__close" onclick="cerrarModalCarga()">×</button>
+<!-- Modal de carga -->
+<div id="cargaModal" class="modal" aria-hidden="true">
+    <div class="modal__overlay" onclick="cerrarModalCarga()"></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal__header">
+            <h2 id="modalTitle">Cargar Excel de Huellero</h2>
+            <button type="button" class="modal__close" onclick="cerrarModalCarga()" aria-label="Cerrar">×</button>
         </div>
-        <div class="carga-modal__body">
+        <div class="modal__body">
             <input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
-            <button id="btnSeleccionarArchivo" class="btn btn--primary">Seleccionar archivo</button>
-            <p id="archivoSeleccionado" class="carga-modal__filename"></p>
-            <div id="cargaEstado" class="carga-modal__estado"></div>
-            <div id="cargaResumen" class="carga-modal__resumen"></div>
-            <div class="carga-modal__actions">
-                <button id="btnProcesarArchivo" class="btn btn--success" disabled>Procesar archivo</button>
-                <button type="button" class="btn btn--primary" onclick="cerrarModalCarga()">Cancelar</button>
+
+            <button id="btnSeleccionarArchivo" class="btn btn--outline btn--full">
+                📁 Seleccionar archivo
+            </button>
+
+            <p id="archivoSeleccionado" class="modal__filename"></p>
+            <div id="cargaEstado" class="modal__estado"></div>
+
+            <div class="modal__actions">
+                <button id="btnProcesarArchivo" class="btn btn--success btn--full" disabled>
+                    ⚙ Procesar archivo
+                </button>
+                <button type="button" class="btn btn--ghost btn--full" onclick="cerrarModalCarga()">
+                    Cancelar
+                </button>
             </div>
         </div>
     </div>
