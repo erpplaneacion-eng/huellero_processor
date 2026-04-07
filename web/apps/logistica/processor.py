@@ -134,13 +134,15 @@ class HuelleroProcessor:
             calculator = Calculator()
             df_resultado = calculator.calcular_metricas(df_turnos, df_con_estados)
 
-            # Agregar datos de maestro (cédulas, cargos) desde DB
+            # Agregar datos de maestro (nombres, cédulas, cargos) desde DB
+            # y cargar conceptos para el dropdown de OBSERVACIONES_1 en el Excel
+            df_empleados, df_cargos, df_conceptos = self._cargar_maestro_desde_db()
+
             if usar_maestro:
-                df_empleados, df_cargos, _ = self._cargar_maestro_desde_db()
                 if df_empleados is not None:
                     df_resultado = calculator.agregar_datos_maestro(df_resultado, df_empleados, df_cargos)
                 else:
-                    logger.warning("Maestro no disponible en DB — documentos quedarán vacíos")
+                    logger.warning("Maestro no disponible en DB — nombres y documentos vendrán del huellero")
 
             # FASE 5: Generación de Excel
             generator = ExcelGenerator()
@@ -158,7 +160,7 @@ class HuelleroProcessor:
                 'estados_inferidos':     int(stats_inference.get('total_inferencias', 0)),
             }
 
-            ruta_salida = generator.generar_excel(df_resultado, stats)
+            ruta_salida = generator.generar_excel(df_resultado, stats, df_conceptos=df_conceptos)
             ruta_casos  = generator.generar_casos_especiales(df_resultado)
 
             logger.log_fin_proceso(exito=True)
