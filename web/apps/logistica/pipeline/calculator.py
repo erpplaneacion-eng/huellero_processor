@@ -149,8 +149,8 @@ class Calculator:
             observaciones = self.generar_observaciones(turno, df_emp_dia)
 
             # Formatear horas
-            entrada_str = turno['entrada'].strftime(config.FORMATO_HORA_OUTPUT) if pd.notna(turno['entrada']) else ''
-            salida_str = turno['salida'].strftime(config.FORMATO_HORA_OUTPUT) if pd.notna(turno['salida']) else ''
+            entrada_str = turno['entrada'].strftime(config.FORMATO_HORA_OUTPUT) if pd.notna(turno['entrada']) else '00:00'
+            salida_str = turno['salida'].strftime(config.FORMATO_HORA_OUTPUT) if pd.notna(turno['salida']) else '00:00'
 
             # Si es turno nocturno, indicar que la salida es del día siguiente
             if turno['es_nocturno'] and pd.notna(turno['salida']) and pd.notna(turno['entrada']):
@@ -310,8 +310,8 @@ class Calculator:
                             'DIA': dia_semana_relleno,
                             '# MARCACIONES AM': '',
                             '# MARCACIONES PM': '',
-                            'HORA DE INGRESO': '',
-                            'HORA DE SALIDA': '',
+                            'HORA DE INGRESO': '00:00',
+                            'HORA DE SALIDA': '00:00',
                             'TOTAL HORAS LABORADAS': '',
                             'LÍMITE HORAS DÍA': '',
                             'OBSERVACION': config.OBSERVACIONES['SIN_REGISTROS'],
