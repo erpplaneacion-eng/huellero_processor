@@ -1,21 +1,23 @@
-﻿/**
- * Frontend Logistica: dashboard por defecto + carga de Excel en modal.
+/**
+ * Frontend Logistica: carga de Excel y descarga de resultado.
  */
 
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof AREA_CONFIG === 'undefined') return;
 
-    const fileInput = document.getElementById('fileInput');
+    const fileInput            = document.getElementById('fileInput');
     const btnSeleccionarArchivo = document.getElementById('btnSeleccionarArchivo');
-    const btnProcesarArchivo = document.getElementById('btnProcesarArchivo');
-    const cargaModal = document.getElementById('cargaModal');
-    const archivoSeleccionado = document.getElementById('archivoSeleccionado');
-    const cargaEstado = document.getElementById('cargaEstado');
-    const cargaResumen = document.getElementById('cargaResumen');
-    const dashboardSection = document.getElementById('dashboardSection');
+    const btnProcesarArchivo   = document.getElementById('btnProcesarArchivo');
+    const cargaModal           = document.getElementById('cargaModal');
+    const archivoSeleccionado  = document.getElementById('archivoSeleccionado');
+    const cargaEstado          = document.getElementById('cargaEstado');
+    const cargaResumen         = document.getElementById('cargaResumen');
+    const resultSection        = document.getElementById('resultSection');
 
-    let selectedFile = null;
+    let selectedFile   = null;
     let estadoInterval = null;
+
+    // ── Estado del modal ─────────────────────────────────────────────────────
 
     function setEstadoCarga(message, kind) {
         if (!cargaEstado) return;
@@ -39,53 +41,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function detenerEstadoProcesando() {
-        if (estadoInterval) {
-            clearInterval(estadoInterval);
-            estadoInterval = null;
-        }
-    }
-
-    function clearResumenCarga() {
-        if (!cargaResumen) return;
-        cargaResumen.innerHTML = '';
-        cargaResumen.classList.remove('is-visible');
-    }
-
-    function safeText(value) {
-        return String(value ?? '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
-    function mostrarResumenCarga(result) {
-        if (!cargaResumen) return;
-
-        const stats = result.stats || {};
-        const dbStats = result.db_stats || {};
-        const duplicados = Number(stats.duplicados_eliminados || 0);
-        const alertaDuplicados = duplicados > 0
-            ? `<div class="carga-modal__alerta">⚠ Se detectaron y eliminaron ${duplicados} duplicados en este archivo.</div>`
-            : '';
-
-        cargaResumen.innerHTML = `
-            ${alertaDuplicados}
-            <ul>
-                <li><strong>Empleados:</strong> ${Number(stats.empleados_unicos || 0)}</li>
-                <li><strong>Registros:</strong> ${Number(stats.total_registros || 0)}</li>
-                <li><strong>Duplicados eliminados:</strong> ${duplicados}</li>
-                <li><strong>Estados inferidos:</strong> ${Number(stats.estados_inferidos || 0)}</li>
-                <li><strong>BD nuevos:</strong> ${Number(dbStats.creados || 0)} | <strong>existentes:</strong> ${Number(dbStats.existentes || 0)} | <strong>errores:</strong> ${Number(dbStats.errores || 0)}</li>
-            </ul>
-        `;
-        cargaResumen.classList.add('is-visible');
-    }
-
-    function validarExtension(fileName) {
-        const lower = (fileName || '').toLowerCase();
-        return lower.endsWith('.xls') || lower.endsWith('.xlsx');
+        if (estadoInterval) { clearInterval(estadoInterval); estadoInterval = null; }
     }
 
     function abrirModalCarga() {
@@ -104,41 +60,46 @@ document.addEventListener('DOMContentLoaded', function () {
         if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
         setArchivoSeleccionado(null);
         setEstadoCarga('', '');
-        clearResumenCarga();
+        if (cargaResumen) cargaResumen.innerHTML = '';
     }
 
-    async function cargarDashboardDesdeBD() {
-        if (!dashboardSection) return;
-        dashboardSection.innerHTML = `
-            <div class="card">
-                <h2 class="card__title"><span class="card__title-icon">⏳</span>Cargando dashboard...</h2>
-                <p class="result__message">Consultando registros procesados.</p>
+    // ── Resultado post-procesamiento ─────────────────────────────────────────
+
+    function mostrarResultado(result) {
+        if (!resultSection) return;
+
+        const stats         = result.stats || {};
+        const urlBase       = AREA_CONFIG.apiDescargar;
+        const urlPrincipal  = result.archivo       ? urlBase + result.archivo + '/'       : null;
+        const urlCasos      = result.archivo_casos ? urlBase + result.archivo_casos + '/' : null;
+        const duplicados    = Number(stats.duplicados_eliminados || 0);
+
+        const alertaDuplicados = duplicados > 0
+            ? `<div class="result-alert">⚠ Se detectaron y eliminaron ${duplicados} marcaciones duplicadas.</div>`
+            : '';
+
+        resultSection.innerHTML = `
+            <div class="result-card">
+                <div class="result-card__icon">✅</div>
+                <h2 class="result-card__title">Archivo procesado exitosamente</h2>
+                ${alertaDuplicados}
+                <ul class="result-card__stats">
+                    <li><strong>${Number(stats.empleados_unicos || 0)}</strong> empleados</li>
+                    <li><strong>${Number(stats.total_registros || 0)}</strong> registros</li>
+                    <li><strong>${Number(stats.duplicados_eliminados || 0)}</strong> duplicados eliminados</li>
+                    <li><strong>${Number(stats.estados_inferidos || 0)}</strong> estados inferidos</li>
+                </ul>
+                <div class="result-card__actions">
+                    ${urlPrincipal ? `<a href="${urlPrincipal}" class="btn btn--success" download>⬇ Descargar reporte Excel</a>` : ''}
+                    ${urlCasos    ? `<a href="${urlCasos}"     class="btn btn--primary" download>📋 Descargar casos de revisión</a>` : ''}
+                    <button class="btn btn--secondary" onclick="abrirModalCarga()">🔄 Procesar otro archivo</button>
+                </div>
             </div>
         `;
-
-        try {
-            const url = AREA_CONFIG.apiListarRegistros + '?page=1';
-            const response = await fetch(url, { method: 'GET' });
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                throw new Error(result.error || 'No fue posible cargar registros.');
-            }
-
-            renderizarDashboard(result, AREA_CONFIG);
-        } catch (error) {
-            dashboardSection.innerHTML = `
-                <div class="card result--error">
-                    <div class="result__icon">❌</div>
-                    <div class="result__title">No se pudo cargar el dashboard</div>
-                    <div class="result__error">${error.message}</div>
-                    <div class="result__actions">
-                        <button class="btn btn--primary" onclick="recargarDashboard()">Reintentar</button>
-                    </div>
-                </div>
-            `;
-        }
+        resultSection.style.display = 'block';
     }
+
+    // ── Procesamiento ────────────────────────────────────────────────────────
 
     async function procesarArchivo() {
         if (!selectedFile) {
@@ -148,7 +109,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
         iniciarEstadoProcesando();
-        clearResumenCarga();
 
         const formData = new FormData();
         formData.append('archivo', selectedFile);
@@ -158,6 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const controller = new AbortController();
             timeoutId = setTimeout(() => controller.abort(), 300000);
+
             const response = await fetch(AREA_CONFIG.apiProcesar, {
                 method: 'POST',
                 body: formData,
@@ -165,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
             clearTimeout(timeoutId);
 
-            let result = null;
+            let result;
             try {
                 result = await response.json();
             } catch (_e) {
@@ -176,26 +137,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 throw new Error(result.error || 'Error durante el procesamiento.');
             }
 
-            renderizarDashboard(result, AREA_CONFIG);
-            mostrarResumenCarga(result);
+            // Cerrar modal y mostrar resultado
+            cerrarModalCarga();
+            mostrarResultado(result);
 
-            // Cuenta regresiva y cierre automático para que el usuario
-            // pueda leer el resumen y luego ver los botones en el dashboard
-            let seg = 5;
-            const tick = setInterval(() => {
-                seg--;
-                setEstadoCarga(`✔ Procesado. Cerrando en ${seg}s…`, 'success');
-                if (seg <= 0) {
-                    clearInterval(tick);
-                    cerrarModalCarga();
-                }
-            }, 1000);
-            setEstadoCarga(`✔ Procesado. Cerrando en ${seg}s…`, 'success');
         } catch (error) {
             if (error && error.name === 'AbortError') {
-                setEstadoCarga('El procesamiento tardó demasiado (timeout de 5 minutos). Intenta con un archivo más pequeño o revisa logs.', 'error');
+                setEstadoCarga('El procesamiento tardó demasiado (timeout 5 min). Intenta con un archivo más pequeño.', 'error');
             } else {
-                setEstadoCarga(error.message || 'Error de conexion con el servidor.', 'error');
+                setEstadoCarga(error.message || 'Error de conexión con el servidor.', 'error');
             }
         } finally {
             if (timeoutId) clearTimeout(timeoutId);
@@ -204,17 +154,19 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // ── Eventos ──────────────────────────────────────────────────────────────
+
     if (fileInput) {
         fileInput.addEventListener('change', function (e) {
             const file = e.target.files && e.target.files.length > 0 ? e.target.files[0] : null;
             if (!file) return;
 
-            if (!validarExtension(file.name)) {
+            const lower = file.name.toLowerCase();
+            if (!lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
                 selectedFile = null;
                 if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
                 setArchivoSeleccionado(null);
-                setEstadoCarga('Formato invalido. Usa .xls o .xlsx.', 'error');
-                clearResumenCarga();
+                setEstadoCarga('Formato inválido. Usa .xls o .xlsx.', 'error');
                 return;
             }
 
@@ -222,16 +174,12 @@ document.addEventListener('DOMContentLoaded', function () {
             if (btnProcesarArchivo) btnProcesarArchivo.disabled = false;
             setArchivoSeleccionado(file);
             setEstadoCarga('', '');
-            clearResumenCarga();
         });
     }
 
     if (btnSeleccionarArchivo) {
         btnSeleccionarArchivo.addEventListener('click', function () {
-            if (fileInput) {
-                fileInput.value = '';
-                fileInput.click();
-            }
+            if (fileInput) { fileInput.value = ''; fileInput.click(); }
         });
     }
 
@@ -239,16 +187,12 @@ document.addEventListener('DOMContentLoaded', function () {
         btnProcesarArchivo.addEventListener('click', procesarArchivo);
     }
 
-    window.abrirModalCarga = abrirModalCarga;
-    window.cerrarModalCarga = cerrarModalCarga;
-    window.cargarOtroArchivo = abrirModalCarga;
-    window.recargarDashboard = cargarDashboardDesdeBD;
-
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && cargaModal && cargaModal.classList.contains('carga-modal--open')) {
             cerrarModalCarga();
         }
     });
 
-    cargarDashboardDesdeBD();
+    window.abrirModalCarga  = abrirModalCarga;
+    window.cerrarModalCarga = cerrarModalCarga;
 });

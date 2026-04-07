@@ -20,181 +20,9 @@ class HuelleroProcessor:
     """Procesador de archivos de huellero"""
 
     def __init__(self, area='logistica'):
-        """
-        Inicializa el procesador
-
-        Args:
-            area: Nombre del área (logistica, supervision, etc.)
-        """
         self.area = area
         self.maestro_dir = config.DIR_MAESTRO
         self.output_dir = config.DIR_OUTPUT
-
-    def _guardar_registros_en_db(self, df_resultado):
-        """
-        Guarda df_resultado en la tabla RegistroAsistencia usando operaciones bulk.
-        - INSERT para registros nuevos
-        - UPDATE para registros existentes: actualiza todos los campos del pipeline
-          y preserva observaciones_1 (anotación manual del usuario).
-
-        Returns:
-            (
-                dict {(codigo, fecha_str, hora_ingreso): {'id', 'obs1'}},
-                {'creados': int, 'existentes': int, 'errores': int}
-            )
-        """
-        import math
-        from datetime import datetime
-        from django.db import transaction
-        from apps.logistica.models import RegistroAsistencia
-
-        CAMPOS_UPDATE = [
-            'nombre', 'documento', 'cargo', 'dia',
-            'marcaciones_am', 'marcaciones_pm',
-            'hora_salida', 'total_horas', 'limite_horas_dia', 'observacion',
-        ]
-
-        def _sfloat(v):
-            try:
-                f = float(v)
-                return None if (math.isnan(f) or math.isinf(f)) else f
-            except (TypeError, ValueError):
-                return None
-
-        # Preparar lista de dicts antes de tocar la DB
-        filas = []
-        for _, row in df_resultado.iterrows():
-            try:
-                fecha_str = str(row.get('FECHA', ''))
-                fecha = datetime.strptime(fecha_str, '%d/%m/%Y').date()
-                codigo = int(float(row.get('CODIGO COLABORADOR', 0)))
-                hora_ingreso = str(row.get('HORA DE INGRESO', '') or '')
-                filas.append({
-                    'codigo':         codigo,
-                    'fecha':          fecha,
-                    'fecha_str':      fecha_str,
-                    'hora_ingreso':   hora_ingreso,
-                    'nombre':         str(row.get('NOMBRE COMPLETO DEL COLABORADOR', '') or ''),
-                    'documento':      str(row.get('DOCUMENTO DEL COLABORADOR', '') or ''),
-                    'cargo':          str(row.get('CARGO', '') or ''),
-                    'dia':            str(row.get('DIA', '') or ''),
-                    'marcaciones_am': int(row.get('# MARCACIONES AM', 0) or 0),
-                    'marcaciones_pm': int(row.get('# MARCACIONES PM', 0) or 0),
-                    'hora_salida':    str(row.get('HORA DE SALIDA', '') or ''),
-                    'total_horas':    _sfloat(row.get('TOTAL HORAS LABORADAS')),
-                    'limite_horas_dia': str(row.get('LÍMITE HORAS DÍA', '') or ''),
-                    'observacion':    str(row.get('OBSERVACION', '') or ''),
-                    'observaciones_1': str(row.get('OBSERVACIONES_1', '') or ''),
-                })
-            except Exception as e:
-                logger.warning(f"Error preparando fila para BD: {e}")
-
-        if not filas:
-            return {}, {'creados': 0, 'existentes': 0, 'errores': 0}
-
-        codigos = {f['codigo'] for f in filas}
-        fechas  = {f['fecha']  for f in filas}
-
-        # ── SELECT: registros existentes (objeto completo para poder hacer bulk_update) ──
-        existentes_db = {
-            (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): r
-            for r in RegistroAsistencia.objects.filter(codigo__in=codigos, fecha__in=fechas)
-        }
-
-        # Separar nuevos vs existentes
-        nuevos_filas = []
-        a_actualizar = []  # list of (objeto_db, fila_nueva)
-
-        for f in filas:
-            key = (f['codigo'], f['fecha_str'], f['hora_ingreso'])
-            if key in existentes_db:
-                a_actualizar.append((existentes_db[key], f))
-            else:
-                nuevos_filas.append(f)
-
-        creados = actualizados = errores = 0
-
-        # ── INSERT nuevos ──
-        if nuevos_filas:
-            objs = []
-            for f in nuevos_filas:
-                try:
-                    objs.append(RegistroAsistencia(
-                        codigo=f['codigo'],
-                        fecha=f['fecha'],
-                        hora_ingreso=f['hora_ingreso'],
-                        nombre=f['nombre'],
-                        documento=f['documento'],
-                        cargo=f['cargo'],
-                        dia=f['dia'],
-                        marcaciones_am=f['marcaciones_am'],
-                        marcaciones_pm=f['marcaciones_pm'],
-                        hora_salida=f['hora_salida'],
-                        total_horas=f['total_horas'],
-                        limite_horas_dia=f['limite_horas_dia'],
-                        observacion=f['observacion'],
-                        observaciones_1=f['observaciones_1'],
-                    ))
-                except Exception as e:
-                    errores += 1
-                    logger.warning(f"Error preparando objeto BD: {e}")
-
-            if objs:
-                try:
-                    with transaction.atomic():
-                        RegistroAsistencia.objects.bulk_create(objs, ignore_conflicts=True)
-                    creados = len(objs)
-                except Exception as e:
-                    errores += len(objs)
-                    logger.warning(f"Error en bulk_create: {e}")
-
-        # ── UPDATE existentes (preserva observaciones_1) ──
-        if a_actualizar:
-            objs_update = []
-            for obj, f in a_actualizar:
-                obj.nombre           = f['nombre']
-                obj.documento        = f['documento']
-                obj.cargo            = f['cargo']
-                obj.dia              = f['dia']
-                obj.marcaciones_am   = f['marcaciones_am']
-                obj.marcaciones_pm   = f['marcaciones_pm']
-                obj.hora_salida      = f['hora_salida']
-                obj.total_horas      = f['total_horas']
-                obj.limite_horas_dia = f['limite_horas_dia']
-                obj.observacion      = f['observacion']
-                # observaciones_1 NO se toca — es anotación manual del usuario
-                objs_update.append(obj)
-            try:
-                with transaction.atomic():
-                    RegistroAsistencia.objects.bulk_update(objs_update, CAMPOS_UPDATE)
-                actualizados = len(objs_update)
-            except Exception as e:
-                errores += len(objs_update)
-                logger.warning(f"Error en bulk_update: {e}")
-
-        # Re-fetch para construir lookup con IDs y obs1 actuales
-        final_db = {
-            (r.codigo, r.fecha.strftime('%d/%m/%Y'), r.hora_ingreso): {
-                'id': r.id, 'obs1': r.observaciones_1,
-            }
-            for r in RegistroAsistencia.objects.filter(
-                codigo__in=codigos, fecha__in=fechas
-            ).only('id', 'codigo', 'fecha', 'hora_ingreso', 'observaciones_1')
-        }
-
-        lookup = {
-            (f['codigo'], f['fecha_str'], f['hora_ingreso']): final_db.get(
-                (f['codigo'], f['fecha_str'], f['hora_ingreso']), {}
-            )
-            for f in filas
-        }
-
-        logger.info(f"Registros BD — nuevos: {creados} | actualizados: {actualizados} | errores: {errores}")
-        return lookup, {
-            'creados': int(creados),
-            'existentes': int(actualizados),
-            'errores': int(errores),
-        }
 
     def _cargar_codigos_excluidos(self):
         """Retorna un set con los códigos de empleados marcados como excluidos en la DB."""
@@ -254,7 +82,6 @@ class HuelleroProcessor:
         try:
             from apps.logistica.models import Cargo, Concepto, Empleado
 
-            # ── Empleados ────────────────────────────────────────────────────
             empleados_qs = Empleado.objects.select_related('cargo').values(
                 'codigo', 'nombre', 'documento', 'cargo__id_cargo'
             )
@@ -265,21 +92,13 @@ class HuelleroProcessor:
             else:
                 df_empleados = None
 
-            # ── Cargos ───────────────────────────────────────────────────────
             cargos_qs = Cargo.objects.values(
                 'id_cargo', 'cargo', 'horas_dia', 'horas_semana', 'numero_colaboradores'
             )
-            if cargos_qs.exists():
-                df_cargos = pd.DataFrame(list(cargos_qs))
-            else:
-                df_cargos = None
+            df_cargos = pd.DataFrame(list(cargos_qs)) if cargos_qs.exists() else None
 
-            # ── Conceptos ────────────────────────────────────────────────────
             conceptos_qs = Concepto.objects.values('observaciones')
-            if conceptos_qs.exists():
-                df_conceptos = pd.DataFrame(list(conceptos_qs))
-            else:
-                df_conceptos = None
+            df_conceptos = pd.DataFrame(list(conceptos_qs)) if conceptos_qs.exists() else None
 
             return df_empleados, df_cargos, df_conceptos
 
@@ -289,173 +108,69 @@ class HuelleroProcessor:
 
     def procesar(self, ruta_archivo, usar_maestro=True):
         """
-        Procesa el archivo de huellero
-
-        Args:
-            ruta_archivo: Ruta al archivo de entrada
-            usar_maestro: Si debe usar archivo maestro
+        Procesa el archivo de huellero y genera los Excel de salida.
 
         Returns:
-            Dict con resultado del procesamiento
+            Dict con: success, archivo, archivo_casos, stats
         """
         logger.log_inicio_proceso(ruta_archivo)
 
         try:
-            # ===== FASE 1: LIMPIEZA DE DATOS =====
+            # FASE 1: Limpieza
             cleaner = DataCleaner()
             codigos_excluidos = self._cargar_codigos_excluidos()
             df_limpio = cleaner.procesar(ruta_archivo, codigos_excluidos)
 
-            # ===== FASE 2: INFERENCIA DE ESTADOS =====
+            # FASE 2: Inferencia de estados
             inference = StateInference()
             horarios_por_codigo = self._cargar_horarios_por_codigo()
             df_con_estados = inference.inferir_estados(df_limpio, horarios_por_codigo)
 
-            # ===== FASE 3: CONSTRUCCIÓN DE TURNOS =====
+            # FASE 3: Construcción de turnos
             builder = ShiftBuilder()
             df_turnos = builder.construir_turnos(df_con_estados)
 
-            # ===== FASE 4: CÁLCULO DE MÉTRICAS =====
+            # FASE 4: Cálculo de métricas
             calculator = Calculator()
             df_resultado = calculator.calcular_metricas(df_turnos, df_con_estados)
 
-            # Agregar datos de maestro desde PostgreSQL
-            df_conceptos = None
+            # Agregar datos de maestro (cédulas, cargos) desde DB
             if usar_maestro:
-                df_empleados, df_cargos, df_conceptos = self._cargar_maestro_desde_db()
+                df_empleados, df_cargos, _ = self._cargar_maestro_desde_db()
                 if df_empleados is not None:
                     df_resultado = calculator.agregar_datos_maestro(df_resultado, df_empleados, df_cargos)
                 else:
                     logger.warning("Maestro no disponible en DB — documentos quedarán vacíos")
 
-            # ===== FASE 5: GENERACIÓN DE EXCEL =====
+            # FASE 5: Generación de Excel
             generator = ExcelGenerator()
 
-            # Preparar estadísticas
             stats_cleaner = cleaner.obtener_resumen()
             stats_inference = inference.obtener_resumen()
             stats_builder = builder.obtener_resumen()
 
-            # Convertir a int nativo de Python para evitar errores de serialización JSON
             stats = {
-                'empleados_unicos': int(df_resultado['CODIGO COLABORADOR'].nunique()),
-                'total_registros': int(len(df_resultado)),
-                'turnos_completos': int(stats_builder.get('turnos_completos', 0)),
-                'turnos_incompletos': int(stats_builder.get('turnos_incompletos', 0)),
+                'empleados_unicos':      int(df_resultado['CODIGO COLABORADOR'].nunique()),
+                'total_registros':       int(len(df_resultado)),
+                'turnos_completos':      int(stats_builder.get('turnos_completos', 0)),
+                'turnos_incompletos':    int(stats_builder.get('turnos_incompletos', 0)),
                 'duplicados_eliminados': int(stats_cleaner.get('duplicados_eliminados', 0)),
-                'estados_inferidos': int(stats_inference.get('total_inferencias', 0)),
+                'estados_inferidos':     int(stats_inference.get('total_inferencias', 0)),
             }
 
-            # Generar Excel
-            ruta_salida = generator.generar_excel(df_resultado, stats, df_conceptos=df_conceptos)
+            ruta_salida = generator.generar_excel(df_resultado, stats)
+            ruta_casos  = generator.generar_casos_especiales(df_resultado)
 
-            # Generar casos especiales
-            ruta_casos = generator.generar_casos_especiales(df_resultado)
-
-            # ===== GUARDAR EN BASE DE DATOS =====
-            db_lookup, db_stats = self._guardar_registros_en_db(df_resultado)
-
-            # ===== FIN DEL PROCESO =====
             logger.log_fin_proceso(exito=True)
 
-            # Preparar respuesta
-            nombre_archivo = os.path.basename(ruta_salida)
-            nombre_casos = os.path.basename(ruta_casos) if ruta_casos else None
-
-            # Serializar datos para el dashboard frontend (con IDs de BD)
-            datos = self._serializar_datos(df_resultado, db_lookup, horarios_por_codigo)
-
-            # Opciones de conceptos para el dropdown en el dashboard
-            from apps.logistica.models import Concepto
-            conceptos = list(Concepto.objects.values_list('observaciones', flat=True).order_by('observaciones'))
-
             return {
-                'success': True,
-                'archivo': nombre_archivo,
-                'archivo_casos': nombre_casos,
-                'stats': stats,
-                'db_stats': db_stats,
-                'area': self.area,
-                'datos': datos,
-                'conceptos': conceptos,
+                'success':       True,
+                'archivo':       os.path.basename(ruta_salida),
+                'archivo_casos': os.path.basename(ruta_casos) if ruta_casos else None,
+                'stats':         stats,
             }
 
         except Exception as e:
             logger.error(f"Error durante el procesamiento: {str(e)}")
             logger.log_fin_proceso(exito=False)
             raise
-
-    def _serializar_datos(self, df, db_lookup=None, horarios_por_codigo=None):
-        """Agrupa el DataFrame por empleado para el dashboard frontend."""
-        import pandas as pd
-
-        def _int_safe(val):
-            try:
-                return int(float(val))
-            except (ValueError, TypeError):
-                return 0
-
-        def _float_safe(val):
-            try:
-                import math
-                f = float(val)
-                return round(f, 2) if not math.isnan(f) else None
-            except (ValueError, TypeError):
-                return None
-
-        def _str_nonempty(val):
-            """Devuelve str si el valor no es NaN ni cadena vacía, si no ''."""
-            if pd.isna(val):
-                return ''
-            s = str(val).strip()
-            return s if s not in ('', 'nan', 'None') else ''
-
-        empleados = {}
-        for _, row in df.iterrows():
-            raw_codigo = row['CODIGO COLABORADOR']
-            if pd.isna(raw_codigo) or str(raw_codigo).strip() == '':
-                continue
-            codigo = str(_int_safe(raw_codigo))
-            codigo_int = int(float(raw_codigo))
-
-            if codigo not in empleados:
-                empleados[codigo] = {
-                    'codigo': codigo,
-                    'nombre': _str_nonempty(row['NOMBRE COMPLETO DEL COLABORADOR']),
-                    'documento': _str_nonempty(row['DOCUMENTO DEL COLABORADOR']),
-                    'cargo': _str_nonempty(row['CARGO']),
-                    'registros': []
-                }
-            fecha_str    = _str_nonempty(row['FECHA'])
-            hora_ingreso = _str_nonempty(row['HORA DE INGRESO'])
-            db_key = (codigo_int, fecha_str, hora_ingreso)
-            db_info = (db_lookup or {}).get(db_key, {})
-
-            # Best-fit: turno del cargo más cercano a la hora de ingreso real
-            turno_str = ''
-            if horarios_por_codigo and hora_ingreso and ':' in hora_ingreso:
-                turnos_raw = horarios_por_codigo.get(codigo_int, [])
-                if turnos_raw:
-                    try:
-                        parts = hora_ingreso.split(':')
-                        ingreso_min = int(parts[0]) * 60 + int(parts[1])
-                        e, s = min(turnos_raw, key=lambda t: abs(t[0] - ingreso_min))
-                        turno_str = f"{e//60:02d}:{e%60:02d}-{s//60:02d}:{s%60:02d}"
-                    except Exception:
-                        pass
-
-            empleados[codigo]['registros'].append({
-                'id':          db_info.get('id'),
-                'fecha':       fecha_str,
-                'dia':         _str_nonempty(row['DIA']),
-                'am':          _int_safe(row['# MARCACIONES AM']),
-                'pm':          _int_safe(row['# MARCACIONES PM']),
-                'ingreso':     hora_ingreso,
-                'salida':      _str_nonempty(row['HORA DE SALIDA']),
-                'horas':       _float_safe(row['TOTAL HORAS LABORADAS']),
-                'limite':      _str_nonempty(row['LÍMITE HORAS DÍA']),
-                'observacion': _str_nonempty(row['OBSERVACION']),
-                'obs1':        db_info.get('obs1', ''),
-                'turno':       turno_str,
-            })
-        return list(empleados.values())

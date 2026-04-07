@@ -39,6 +39,10 @@ python web/manage.py cargar_maestro
 # Options:
 python web/manage.py cargar_maestro --ruta data/maestro/empleados.xlsx
 python web/manage.py cargar_maestro --limpiar
+
+# Sync employees from external Railway DB (tabla_planta) → maestro_empleado
+# Crosses by cédula/documento; skips rows without cédula. Requires RAILWAY_EXTERNAL_DB_URL.
+python web/manage.py sincronizar_planta
 ```
 
 ### Nómina Management Commands
@@ -193,7 +197,15 @@ The system reads/writes to a Google Sheets workbook with these sheets:
 
 #### Webhooks
 
-- **`/supervision/api/webhook/novedad-nomina/`** — Receives AppSheet notifications when NOVEDAD=SI. Creates records in `novedades_cali` sheet. Requires `WEBHOOK_SECRET_TOKEN` in payload.
+- **`/supervision/api/webhook/novedad-nomina/`** — Receives AppSheet notifications when NOVEDAD=SI. Creates records in `novedades_cali` sheet. Requires `WEBHOOK_SECRET_TOKEN` in payload. Supports `?sede=YUMBO` to route to the correct spreadsheet.
+
+#### Novedades Persistence Logic
+
+`nomina_cali_diaria` implements active-range detection for novedades:
+- For each employee, checks `novedades_cali` sheet. If the processing date falls between `FECHA` and `FECHA FINAL`, the novedad is **active**.
+- While active: sets `TOTAL HORAS → 0`, inherits `TIPO TIEMPO LABORADO` from the novedad, sets `NOVEDAD=SI`.
+- Once the date exceeds `FECHA FINAL`, the employee automatically reverts to their standard shift and `P. ALIMENTOS` status.
+- **Cédula normalization:** Dots, commas, and spaces are stripped from IDs when matching across sheets (`Manipuladoras` ↔ `novedades_cali`). Custom processors must apply the same normalization.
 
 #### Daily Workflow
 
@@ -258,12 +270,14 @@ This rule does NOT apply to the right column (novedades_cali).
 
 **Shift Rotation (Multiple Turnos):**
 
-For sedes with multiple shifts and manipuladoras, the system rotates shifts using:
-```
-turno_index = (día_semana + índice_manipuladora) % cantidad_turnos
-```
+`nomina_cali_diaria` applies triple-layer priority per manipuladora per day:
 
-Example for sede with 2 shifts (A, B) and 3 manipuladoras:
+1. **Exclusión (Estado):** Employees with `Estado ≠ Activo` (e.g., `Incapacitada`) in the `Manipuladoras` sheet are skipped entirely.
+2. **Turno fijo (Priority 1):** If the `TURNOS` column in `Manipuladoras` has a specific value (e.g., "A", "B"), that schedule is always used — overrides rotation. For employees with fixed schedules.
+3. **Rotación automática (Priority 2):** If `TURNOS` is empty, applies formula: `turno_index = (día_semana + índice_manipuladora) % cantidad_turnos`
+4. **Regla sábado:** Saturdays always generate records with empty hours regardless of assigned shift or rotation.
+
+Example rotation for sede with 2 shifts (A, B) and 3 manipuladoras:
 | Manipuladora | Lun | Mar | Mié | Jue | Vie |
 |--------------|-----|-----|-----|-----|-----|
 | [0] María    |  A  |  B  |  A  |  B  |  A  |
@@ -324,6 +338,9 @@ EMAIL_COORDINADOR=<recipient-email>
 
 # Webhooks & Cron authentication
 WEBHOOK_SECRET_TOKEN=<secret-token>
+
+# External DB sync (sincronizar_planta command)
+RAILWAY_EXTERNAL_DB_URL=<postgresql-connection-string>  # source DB with tabla_planta
 ```
 
 ### Data directories

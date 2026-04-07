@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Cargo, CargoHorario, Concepto, Empleado, Horario, RegistroAsistencia
+from .models import Cargo, CargoHorario, Concepto, Empleado, Horario
 
 
 @admin.register(Empleado)
@@ -33,12 +33,3 @@ class CargoHorarioAdmin(admin.ModelAdmin):
 class ConceptoAdmin(admin.ModelAdmin):
     list_display  = ('observaciones', 'procesos')
     search_fields = ('observaciones', 'procesos')
-
-
-@admin.register(RegistroAsistencia)
-class RegistroAsistenciaAdmin(admin.ModelAdmin):
-    list_display   = ('codigo', 'nombre', 'fecha', 'hora_ingreso', 'hora_salida', 'total_horas', 'observacion', 'observaciones_1')
-    list_filter    = ('fecha', 'cargo')
-    search_fields  = ('nombre', 'codigo', 'documento')
-    ordering       = ('-fecha', 'codigo')
-    list_editable  = ('observaciones_1',)

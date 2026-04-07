@@ -1,4 +1,4 @@
-﻿{% extends 'base.html' %}
+{% extends 'base.html' %}
 {% load static %}
 
 {% block title %}Procesador de Huellero{% endblock %}
@@ -11,15 +11,20 @@
     <p class="header__subtitle">Corporacion Hacia un Valle Solidario</p>
 </header>
 
-<section id="dashboardSection" class="dashboard-section">
-    <div class="card">
-        <h2 class="card__title">
-            <span class="card__title-icon">⏳</span>
-            Cargando dashboard...
+<section id="uploadSection" class="dashboard-section">
+    <div class="card" style="text-align:center; padding: 3rem 2rem;">
+        <h2 class="card__title" style="justify-content:center;">
+            <span class="card__title-icon">📂</span>
+            Cargar archivo de huellero
         </h2>
-        <p class="result__message">Consultando registros procesados.</p>
+        <p class="result__message" style="margin: 1rem 0 2rem;">
+            Sube un archivo Excel (.xls o .xlsx) exportado del huellero biométrico para generar el reporte de asistencia.
+        </p>
+        <button class="btn btn--primary" onclick="abrirModalCarga()">Seleccionar archivo Excel</button>
     </div>
 </section>
+
+<section id="resultSection" style="display:none;" class="dashboard-section"></section>
 
 <div id="cargaModal" class="carga-modal" aria-hidden="true">
     <div class="carga-modal__overlay" onclick="cerrarModalCarga()"></div>
@@ -44,13 +49,11 @@
 {% endblock %}
 
 {% block extra_js %}
-<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 <script>
     const AREA_CONFIG = {
         apiProcesar:  '{% url "logistica:procesar" %}',
         apiDescargar: '{% url "logistica:descargar" filename="PLACEHOLDER" %}'.replace('PLACEHOLDER/', ''),
     };
 </script>
-<script src="{% static 'js/dashboard.js' %}"></script>
 <script src="{% static 'js/app.js' %}"></script>
 {% endblock %}
