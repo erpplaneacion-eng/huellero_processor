@@ -53,9 +53,33 @@ class ProcesarView(View):
                     destino.write(chunk)
 
             usar_maestro = request.POST.get('usar_maestro', 'true').lower() == 'true'
+            fecha_inicio_str = (request.POST.get('fecha_inicio') or '').strip()
+            fecha_fin_str = (request.POST.get('fecha_fin') or '').strip()
+
+            fecha_inicio = None
+            fecha_fin = None
+            if fecha_inicio_str:
+                try:
+                    fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Fecha inicio inválida. Use formato YYYY-MM-DD.'}, status=400)
+
+            if fecha_fin_str:
+                try:
+                    fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Fecha final inválida. Use formato YYYY-MM-DD.'}, status=400)
+
+            if fecha_inicio and fecha_fin and fecha_inicio > fecha_fin:
+                return JsonResponse({'success': False, 'error': 'La fecha inicio no puede ser mayor que la fecha final.'}, status=400)
 
             processor = HuelleroProcessor(area='logistica')
-            resultado = processor.procesar(str(ruta_archivo), usar_maestro)
+            resultado = processor.procesar(
+                str(ruta_archivo),
+                usar_maestro,
+                fecha_inicio=fecha_inicio,
+                fecha_fin=fecha_fin,
+            )
 
             return JsonResponse(resultado)
 

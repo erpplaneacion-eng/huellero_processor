@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const modal                 = document.getElementById('cargaModal');
     const archivoSeleccionado   = document.getElementById('archivoSeleccionado');
     const estadoEl              = document.getElementById('cargaEstado');
+    const fechaInicioEl         = document.getElementById('fechaInicio');
+    const fechaFinEl            = document.getElementById('fechaFin');
     const uploadSection         = document.getElementById('uploadSection');
     const resultSection         = document.getElementById('resultSection');
 
@@ -56,6 +58,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (fileInput) fileInput.value = '';
         if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
         if (archivoSeleccionado) archivoSeleccionado.textContent = '';
+        if (fechaInicioEl) fechaInicioEl.value = '';
+        if (fechaFinEl) fechaFinEl.value = '';
+        if (fechaInicioEl) fechaInicioEl.max = '';
+        if (fechaFinEl) {
+            fechaFinEl.min = '';
+            fechaFinEl.max = '';
+        }
         setEstado('');
     }
 
@@ -117,12 +126,22 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        const fechaInicio = fechaInicioEl?.value || '';
+        const fechaFin = fechaFinEl?.value || '';
+        if (fechaInicio && fechaFin && fechaInicio > fechaFin) {
+            setEstado('La fecha inicio no puede ser mayor que la fecha final.', 'error');
+            return;
+        }
+
         if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
         iniciarProcesando();
 
         const formData = new FormData();
         formData.append('archivo', selectedFile);
         formData.append('usar_maestro', 'true');
+        if (fechaInicio) formData.append('fecha_inicio', fechaInicio);
+        if (fechaFin) formData.append('fecha_fin', fechaFin);
+
         let timeoutId = null;
 
         try {
@@ -194,6 +213,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (btnProcesarArchivo) {
         btnProcesarArchivo.addEventListener('click', procesarArchivo);
+    }
+
+    if (fechaInicioEl && fechaFinEl) {
+        fechaInicioEl.addEventListener('change', () => {
+            fechaFinEl.min = fechaInicioEl.value || '';
+        });
+        fechaFinEl.addEventListener('change', () => {
+            fechaInicioEl.max = fechaFinEl.value || '';
+        });
     }
 
     document.addEventListener('keydown', (e) => {

@@ -106,7 +106,32 @@ class HuelleroProcessor:
             logger.warning(f"No se pudo cargar maestro desde DB: {e}")
             return None, None, None
 
-    def procesar(self, ruta_archivo, usar_maestro=True):
+    def _filtrar_por_rango_fechas(self, df_resultado, fecha_inicio=None, fecha_fin=None):
+        """Filtra los registros finales por rango de fechas inclusivo."""
+        if (fecha_inicio is None and fecha_fin is None) or df_resultado.empty:
+            return df_resultado
+
+        df_filtrado = df_resultado.copy()
+        df_filtrado['FECHA_DT'] = pd.to_datetime(
+            df_filtrado['FECHA'],
+            format=config.FORMATO_FECHA_OUTPUT,
+            errors='coerce'
+        ).dt.date
+
+        mask = pd.Series(True, index=df_filtrado.index)
+        if fecha_inicio is not None:
+            mask &= df_filtrado['FECHA_DT'] >= fecha_inicio
+        if fecha_fin is not None:
+            mask &= df_filtrado['FECHA_DT'] <= fecha_fin
+
+        df_filtrado = df_filtrado.loc[mask].drop(columns=['FECHA_DT']).reset_index(drop=True)
+        logger.info(
+            f"Filtro de fechas aplicado: {fecha_inicio or 'sin inicio'} a "
+            f"{fecha_fin or 'sin fin'} | Registros: {len(df_resultado)} -> {len(df_filtrado)}"
+        )
+        return df_filtrado
+
+    def procesar(self, ruta_archivo, usar_maestro=True, fecha_inicio=None, fecha_fin=None):
         """
         Procesa el archivo de huellero y genera los Excel de salida.
 
@@ -143,6 +168,10 @@ class HuelleroProcessor:
                     df_resultado = calculator.agregar_datos_maestro(df_resultado, df_empleados, df_cargos)
                 else:
                     logger.warning("Maestro no disponible en DB — nombres y documentos vendrán del huellero")
+            # Filtro opcional por rango de fechas para el reporte final
+            df_resultado = self._filtrar_por_rango_fechas(df_resultado, fecha_inicio, fecha_fin)
+            if df_resultado.empty:
+                raise ValueError("No se encontraron registros en el rango de fechas seleccionado.")
 
             # FASE 5: Generación de Excel
             generator = ExcelGenerator()

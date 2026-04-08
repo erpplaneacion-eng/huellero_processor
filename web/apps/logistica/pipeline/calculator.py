@@ -5,6 +5,7 @@ Calcula horas, conteos y genera observaciones
 
 import pandas as pd
 from datetime import datetime, timedelta, time
+from dateutil.easter import easter
 from . import config
 from .logger import logger
 
@@ -14,7 +15,64 @@ class Calculator:
 
     def __init__(self):
         """Inicializa el calculador"""
-        pass
+        self._festivos_cache = {}
+
+    @staticmethod
+    def _siguiente_lunes(fecha):
+        """Mueve una fecha al siguiente lunes (Ley Emiliani)."""
+        dias_hasta_lunes = (7 - fecha.weekday()) % 7
+        return fecha + timedelta(days=dias_hasta_lunes)
+
+    def _obtener_festivos_colombia(self, anio):
+        """Retorna set de festivos de Colombia para un año dado."""
+        if anio in self._festivos_cache:
+            return self._festivos_cache[anio]
+
+        pascua = easter(anio)
+        festivos = set()
+
+        # Fijos (no trasladables)
+        festivos.update({
+            datetime(anio, 1, 1).date(),   # Año Nuevo
+            datetime(anio, 5, 1).date(),   # Día del Trabajo
+            datetime(anio, 7, 20).date(),  # Independencia
+            datetime(anio, 8, 7).date(),   # Batalla de Boyacá
+            datetime(anio, 12, 8).date(),  # Inmaculada Concepción
+            datetime(anio, 12, 25).date(), # Navidad
+        })
+
+        # Emiliani (se trasladan al siguiente lunes)
+        emiliani = [
+            datetime(anio, 1, 6).date(),   # Reyes Magos
+            datetime(anio, 3, 19).date(),  # San José
+            datetime(anio, 6, 29).date(),  # San Pedro y San Pablo
+            datetime(anio, 8, 15).date(),  # Asunción
+            datetime(anio, 10, 12).date(), # Día de la Raza
+            datetime(anio, 11, 1).date(),  # Todos los Santos
+            datetime(anio, 11, 11).date(), # Independencia de Cartagena
+        ]
+        for fecha in emiliani:
+            festivos.add(self._siguiente_lunes(fecha))
+
+        # Relacionados con Pascua
+        festivos.add(pascua - timedelta(days=3))   # Jueves Santo
+        festivos.add(pascua - timedelta(days=2))   # Viernes Santo
+        festivos.add(self._siguiente_lunes(pascua + timedelta(days=43)))  # Ascensión
+        festivos.add(self._siguiente_lunes(pascua + timedelta(days=64)))  # Corpus Christi
+        festivos.add(self._siguiente_lunes(pascua + timedelta(days=71)))  # Sagrado Corazón
+
+        self._festivos_cache[anio] = festivos
+        return festivos
+
+    def _observacion_dia_especial(self, fecha):
+        """Retorna observación especial del día o None."""
+        if not fecha:
+            return None
+        if fecha.weekday() == 6:
+            return config.OBSERVACIONES['TRABAJO_DOMINICAL']
+        if fecha in self._obtener_festivos_colombia(fecha.year):
+            return config.OBSERVACIONES['DIA_FESTIVO']
+        return None
 
     def contar_marcaciones_am_pm(self, df_empleado_dia):
         """
@@ -110,9 +168,9 @@ class Calculator:
 
         # Día de la semana
         if turno['fecha']:
-            dia_semana = turno['fecha'].weekday()
-            if dia_semana == 6:  # Domingo
-                observaciones.append(config.OBSERVACIONES['TRABAJO_DOMINICAL'])
+            obs_dia_especial = self._observacion_dia_especial(turno['fecha'])
+            if obs_dia_especial:
+                observaciones.append(obs_dia_especial)
 
         # Si no hay observaciones
         if not observaciones:
@@ -320,7 +378,10 @@ class Calculator:
                             'HORA DE SALIDA': '00:00',
                             'TOTAL HORAS LABORADAS': '',
                             'LÍMITE HORAS DÍA': '',
-                            'OBSERVACION': config.OBSERVACIONES['SIN_REGISTROS'],
+                            'OBSERVACION': (
+                                self._observacion_dia_especial(fecha_relleno.date())
+                                or config.OBSERVACIONES['SIN_REGISTROS']
+                            ),
                             'OBSERVACIONES_1': ''
                         }
                         nuevos_registros.append(nuevo_reg)
