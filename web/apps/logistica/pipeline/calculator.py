@@ -245,10 +245,16 @@ class Calculator:
         # Rellenar días faltantes
         df_resultado = self.rellenar_dias_faltantes(df_resultado)
 
-        # Ordenar por código y fecha
+        # Ordenar por código y fecha real (descendente)
+        df_resultado['FECHA_DT'] = pd.to_datetime(
+            df_resultado['FECHA'],
+            format=config.FORMATO_FECHA_OUTPUT,
+            errors='coerce'
+        )
         df_resultado = df_resultado.sort_values(
-            ['CODIGO COLABORADOR', 'FECHA']
-        ).reset_index(drop=True)
+            ['CODIGO COLABORADOR', 'FECHA_DT'],
+            ascending=[True, False]
+        ).drop(columns=['FECHA_DT']).reset_index(drop=True)
 
         logger.info(config.MENSAJES['calculo_completo'])
         logger.info(f"Total registros calculados: {len(df_resultado)}")
