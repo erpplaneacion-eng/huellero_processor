@@ -133,12 +133,17 @@ class HuelleroProcessor:
 
     def procesar(self, ruta_archivo, usar_maestro=True, fecha_inicio=None, fecha_fin=None):
         """
-        Procesa el archivo de huellero y genera los Excel de salida.
+        Procesa el archivo (o lista de archivos) de huellero y genera los Excel de salida.
+
+        Args:
+            ruta_archivo: str con la ruta de un archivo, o lista de rutas cuando
+                          se deben combinar varios archivos antes de procesar.
 
         Returns:
             Dict con: success, archivo, archivo_casos, stats
         """
-        logger.log_inicio_proceso(ruta_archivo)
+        etiqueta = ruta_archivo if isinstance(ruta_archivo, str) else ' + '.join(ruta_archivo)
+        logger.log_inicio_proceso(etiqueta)
 
         try:
             # FASE 1: Limpieza

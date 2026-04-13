@@ -5,18 +5,22 @@
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof AREA_CONFIG === 'undefined') return;
 
-    const fileInput             = document.getElementById('fileInput');
-    const btnSeleccionarArchivo = document.getElementById('btnSeleccionarArchivo');
-    const btnProcesarArchivo    = document.getElementById('btnProcesarArchivo');
-    const modal                 = document.getElementById('cargaModal');
-    const archivoSeleccionado   = document.getElementById('archivoSeleccionado');
-    const estadoEl              = document.getElementById('cargaEstado');
-    const fechaInicioEl         = document.getElementById('fechaInicio');
-    const fechaFinEl            = document.getElementById('fechaFin');
-    const uploadSection         = document.getElementById('uploadSection');
-    const resultSection         = document.getElementById('resultSection');
+    const fileInput              = document.getElementById('fileInput');
+    const fileInput2             = document.getElementById('fileInput2');
+    const btnSeleccionarArchivo  = document.getElementById('btnSeleccionarArchivo');
+    const btnSeleccionarArchivo2 = document.getElementById('btnSeleccionarArchivo2');
+    const btnProcesarArchivo     = document.getElementById('btnProcesarArchivo');
+    const modal                  = document.getElementById('cargaModal');
+    const archivoSeleccionado    = document.getElementById('archivoSeleccionado');
+    const archivoSeleccionado2   = document.getElementById('archivoSeleccionado2');
+    const estadoEl               = document.getElementById('cargaEstado');
+    const fechaInicioEl          = document.getElementById('fechaInicio');
+    const fechaFinEl             = document.getElementById('fechaFin');
+    const uploadSection          = document.getElementById('uploadSection');
+    const resultSection          = document.getElementById('resultSection');
 
     let selectedFile   = null;
+    let selectedFile2  = null;
     let estadoInterval = null;
 
     // ── Helpers de estado ────────────────────────────────────────────────────
@@ -54,10 +58,13 @@ document.addEventListener('DOMContentLoaded', function () {
         modal.classList.remove('modal--open');
         modal.setAttribute('aria-hidden', 'true');
         detenerProcesando();
-        selectedFile = null;
-        if (fileInput) fileInput.value = '';
+        selectedFile  = null;
+        selectedFile2 = null;
+        if (fileInput)  fileInput.value  = '';
+        if (fileInput2) fileInput2.value = '';
         if (btnProcesarArchivo) btnProcesarArchivo.disabled = true;
-        if (archivoSeleccionado) archivoSeleccionado.textContent = '';
+        if (archivoSeleccionado)  archivoSeleccionado.textContent  = '';
+        if (archivoSeleccionado2) archivoSeleccionado2.textContent = '';
         if (fechaInicioEl) fechaInicioEl.value = '';
         if (fechaFinEl) fechaFinEl.value = '';
         if (fechaInicioEl) fechaInicioEl.max = '';
@@ -138,6 +145,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const formData = new FormData();
         formData.append('archivo', selectedFile);
+        if (selectedFile2) formData.append('archivo2', selectedFile2);
         formData.append('usar_maestro', 'true');
         if (fechaInicio) formData.append('fecha_inicio', fechaInicio);
         if (fechaFin) formData.append('fecha_fin', fechaFin);
@@ -205,9 +213,34 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    if (fileInput2) {
+        fileInput2.addEventListener('change', function (e) {
+            const file = e.target.files?.[0] ?? null;
+            if (!file) return;
+
+            const lower = file.name.toLowerCase();
+            if (!lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
+                selectedFile2 = null;
+                if (archivoSeleccionado2) archivoSeleccionado2.textContent = '';
+                setEstado('Archivo 2: formato inválido. Usa .xls o .xlsx.', 'error');
+                return;
+            }
+
+            selectedFile2 = file;
+            if (archivoSeleccionado2) archivoSeleccionado2.textContent = `📄 ${file.name}`;
+            setEstado('');
+        });
+    }
+
     if (btnSeleccionarArchivo) {
         btnSeleccionarArchivo.addEventListener('click', () => {
             if (fileInput) { fileInput.value = ''; fileInput.click(); }
+        });
+    }
+
+    if (btnSeleccionarArchivo2) {
+        btnSeleccionarArchivo2.addEventListener('click', () => {
+            if (fileInput2) { fileInput2.value = ''; fileInput2.click(); }
         });
     }
 

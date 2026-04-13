@@ -356,14 +356,28 @@ class DataCleaner:
         Procesa completo: carga, limpia estructura y elimina duplicados.
 
         Args:
-            ruta_archivo: Ruta al archivo de entrada.
+            ruta_archivo: Ruta al archivo de entrada (str) o lista de rutas.
+                          Si se pasan dos archivos se combinan antes de procesar.
             codigos_excluidos: set/list de códigos (int) de empleados que deben
                                omitirse completamente del análisis. Opcional.
 
         Returns:
             DataFrame limpio sin los empleados excluidos.
         """
-        df = self.cargar_archivo(ruta_archivo)
+        if isinstance(ruta_archivo, (list, tuple)):
+            rutas = list(ruta_archivo)
+        else:
+            rutas = [ruta_archivo]
+
+        dfs_crudos = [self.cargar_archivo(r) for r in rutas]
+
+        if len(dfs_crudos) > 1:
+            df = pd.concat(dfs_crudos, ignore_index=True)
+            self.df_original = df.copy()
+            logger.info(f"Archivos combinados: {len(df)} registros en total")
+        else:
+            df = dfs_crudos[0]
+
         df = self.limpiar_estructura(df)
 
         # Excluir empleados marcados en la BD

@@ -52,6 +52,21 @@ class ProcesarView(View):
                 for chunk in archivo.chunks():
                     destino.write(chunk)
 
+            rutas_archivos = [str(ruta_archivo)]
+
+            # Segundo archivo opcional
+            archivo2 = request.FILES.get('archivo2')
+            if archivo2:
+                if not archivo2.name.lower().endswith(('.xls', '.xlsx')):
+                    return JsonResponse({'success': False, 'error': 'Archivo 2: formato no válido. Use .xls o .xlsx'}, status=400)
+                extension2 = os.path.splitext(archivo2.name)[1]
+                nombre_archivo2 = f"huellero_logistica_{timestamp}_2{extension2}"
+                ruta_archivo2 = settings.DATA_INPUT_DIR / nombre_archivo2
+                with open(ruta_archivo2, 'wb+') as destino2:
+                    for chunk in archivo2.chunks():
+                        destino2.write(chunk)
+                rutas_archivos.append(str(ruta_archivo2))
+
             usar_maestro = request.POST.get('usar_maestro', 'true').lower() == 'true'
             fecha_inicio_str = (request.POST.get('fecha_inicio') or '').strip()
             fecha_fin_str = (request.POST.get('fecha_fin') or '').strip()
@@ -75,7 +90,7 @@ class ProcesarView(View):
 
             processor = HuelleroProcessor(area='logistica')
             resultado = processor.procesar(
-                str(ruta_archivo),
+                rutas_archivos if len(rutas_archivos) > 1 else rutas_archivos[0],
                 usar_maestro,
                 fecha_inicio=fecha_inicio,
                 fecha_fin=fecha_fin,

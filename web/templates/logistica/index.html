@@ -41,12 +41,17 @@
         </div>
         <div class="modal__body">
             <input type="file" id="fileInput" class="file-input" accept=".xls,.xlsx">
+            <input type="file" id="fileInput2" class="file-input" accept=".xls,.xlsx">
 
             <button id="btnSeleccionarArchivo" class="btn btn--outline btn--full">
-                📁 Seleccionar archivo
+                📁 Archivo 1
             </button>
-
             <p id="archivoSeleccionado" class="modal__filename"></p>
+
+            <button id="btnSeleccionarArchivo2" class="btn btn--outline btn--full" style="margin-top:8px;">
+                📁 Archivo 2 <span style="font-weight:normal;font-size:0.85em;">(opcional)</span>
+            </button>
+            <p id="archivoSeleccionado2" class="modal__filename"></p>
 
             <div class="modal__range">
                 <label class="modal__label" for="fechaInicio">Fecha inicio</label>
