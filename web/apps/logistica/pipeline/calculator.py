@@ -311,7 +311,7 @@ class Calculator:
         )
         df_resultado = df_resultado.sort_values(
             ['CODIGO COLABORADOR', 'FECHA_DT'],
-            ascending=[True, False]
+            ascending=[True, True]
         ).drop(columns=['FECHA_DT']).reset_index(drop=True)
 
         logger.info(config.MENSAJES['calculo_completo'])
