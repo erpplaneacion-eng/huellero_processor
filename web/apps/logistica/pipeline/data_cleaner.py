@@ -3,6 +3,9 @@ Módulo de Limpieza de Datos
 Elimina duplicados y prepara los datos para procesamiento
 """
 
+import re
+from datetime import datetime
+
 import pandas as pd
 from . import config
 from .logger import logger
@@ -16,6 +19,25 @@ class DataCleaner:
         self.df_original = None
         self.df_limpio = None
         self.duplicados_eliminados = []
+
+    @staticmethod
+    def _parsear_fecha_hora(valor):
+        """Parsea fechas en formato 24h (DD/MM/YYYY HH:MM) o 12h AM/PM (nuevo huellero)."""
+        if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+            return pd.NaT
+        if isinstance(valor, (pd.Timestamp, datetime)):
+            return valor
+        s = str(valor).strip()
+        # Normalizar narrow no-break space (U+202F) y variantes de AM/PM en español
+        s = s.replace(' ', ' ').replace(' ', ' ')
+        s = re.sub(r'a\.\s*m\.', 'AM', s, flags=re.IGNORECASE)
+        s = re.sub(r'p\.\s*m\.', 'PM', s, flags=re.IGNORECASE)
+        for fmt in ('%d/%m/%Y %I:%M:%S %p', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M'):
+            try:
+                return datetime.strptime(s, fmt)
+            except ValueError:
+                continue
+        return pd.NaT
 
     def cargar_archivo(self, ruta_archivo):
         """
@@ -34,20 +56,20 @@ class DataCleaner:
             # Leer archivo Excel
             df = pd.read_excel(ruta_archivo)
 
-            # Verificar si "ID" ya es columna del DataFrame
-            if 'ID' in df.columns:
-                # El encabezado ya fue detectado correctamente
-                pass
-            else:
-                # Identificar fila de encabezado (buscar "ID" en los datos)
+            # Verificar si el encabezado ya fue detectado correctamente
+            # Soporta formato antiguo (col "ID") y nuevo (col "Número")
+            COLUMNAS_ID = {'ID', 'Número', 'Numero'}
+            if not COLUMNAS_ID.intersection(df.columns):
+                # Buscar fila de encabezado en los datos
                 header_row = None
                 for idx, row in df.iterrows():
-                    if 'ID' in str(row.values):
+                    valores = [str(v) for v in row.values]
+                    if any(c in valores for c in COLUMNAS_ID):
                         header_row = idx
                         break
 
                 if header_row is None:
-                    raise ValueError("No se encontró la fila de encabezado con 'ID'")
+                    raise ValueError("No se encontró la fila de encabezado con 'ID' o 'Número'")
 
                 # Releer con el encabezado correcto
                 df = pd.read_excel(ruta_archivo, header=header_row + 1)
@@ -104,12 +126,15 @@ class DataCleaner:
         """
         logger.log_fase("LIMPIEZA DE ESTRUCTURA")
 
-        # Renombrar columnas
+        # Renombrar columnas — soporta formato antiguo y nuevo huellero
         columnas_nuevas = {
             'ID': 'CODIGO',
+            'Número': 'CODIGO',       # nuevo huellero
+            'Numero': 'CODIGO',       # sin tilde
             'Nombre': 'NOMBRE',
-            'Nombre ': 'NOMBRE',  # Variante con espacio
+            'Nombre ': 'NOMBRE',
             'Fecha / Hora': 'FECHA_HORA',
+            'Tiempo': 'FECHA_HORA',   # nuevo huellero
             'Estado': 'ESTADO',
             'Tipo de Registro': 'TIPO'
         }
@@ -132,11 +157,7 @@ class DataCleaner:
 
         # Convertir tipos de datos
         df['CODIGO'] = pd.to_numeric(df['CODIGO'], errors='coerce')
-        df['FECHA_HORA'] = pd.to_datetime(
-            df['FECHA_HORA'],
-            format=config.FORMATO_FECHA_INPUT,
-            errors='coerce'
-        )
+        df['FECHA_HORA'] = df['FECHA_HORA'].apply(self._parsear_fecha_hora)
 
         # Eliminar filas sin datos esenciales
         df = df.dropna(subset=['CODIGO', 'FECHA_HORA'])
